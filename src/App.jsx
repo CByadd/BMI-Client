@@ -59,21 +59,51 @@ function App() {
     run()
   }, [serverBase, bmiId, user])
 
-  const handleAuth = (userData) => {
-    setUser(userData)
-    localStorage.setItem('bmi_user', JSON.stringify(userData))
-    setShowAuth(false)
-    setShowPayment(true)
+  const handleAuth = async (userData) => {
+    try {
+      // Create/find user in database
+      const res = await fetch(`${serverBase}/api/user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: userData.name, mobile: userData.mobile })
+      });
+      const userResponse = await res.json();
+      if (!res.ok) throw new Error(userResponse.error || 'Failed to create user');
+      
+      setUser({ ...userData, userId: userResponse.userId });
+      localStorage.setItem('bmi_user', JSON.stringify({ ...userData, userId: userResponse.userId }));
+      setShowAuth(false);
+      setShowPayment(true);
+    } catch (e) {
+      console.error('Auth error:', e);
+      // Fallback to local storage only
+      setUser(userData);
+      localStorage.setItem('bmi_user', JSON.stringify(userData));
+      setShowAuth(false);
+      setShowPayment(true);
+    }
   }
 
-  const handlePaymentSuccess = () => {
-    setShowPayment(false)
-    setShowWaiting(true)
+  const handlePaymentSuccess = async () => {
+    setShowPayment(false);
+    setShowWaiting(true);
+    
+    try {
+      // Notify server of payment success
+      await fetch(`${serverBase}/api/payment-success`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.userId, bmiId })
+      });
+    } catch (e) {
+      console.error('Payment success notification error:', e);
+    }
+    
     // Show BMI after 5 seconds
     setTimeout(() => {
-      setShowWaiting(false)
-      setShowBMI(true)
-    }, 5000)
+      setShowWaiting(false);
+      setShowBMI(true);
+    }, 5000);
   }
 
   if (showAuth) {
