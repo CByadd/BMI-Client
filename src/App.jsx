@@ -92,10 +92,8 @@ function App() {
         
         console.log(`[CLIENT] BMI data received:`, json)
         setData(json)
-        // Show auth if no user
-        if (!user) {
-          setShowAuth(true)
-        }
+        // Always show auth form first (compulsory payment flow)
+        setShowAuth(true)
       } catch (e) {
         console.error('[CLIENT] Fetch error:', e)
         setError(e.message)
@@ -284,6 +282,19 @@ function AuthForm({ onSubmit, screenId, serverBase }) {
   const [isSignup, setIsSignup] = useState(false)
   const [showBMICreation, setShowBMICreation] = useState(false)
 
+  // Pre-fill form with existing user data if available
+  useEffect(() => {
+    const saved = localStorage.getItem('bmi_user')
+    if (saved) {
+      try {
+        const userData = JSON.parse(saved)
+        setName(userData.name || '')
+        setMobile(userData.mobile || '')
+        setIsSignup(false) // Existing user, so it's login
+      } catch {}
+    }
+  }, [])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!name.trim() || !mobile.trim()) return
@@ -320,7 +331,12 @@ function AuthForm({ onSubmit, screenId, serverBase }) {
 
   return (
     <div style={{ maxWidth: 400, margin: '40px auto', fontFamily: 'system-ui, Arial' }}>
-      <h2>{showBMICreation ? 'Create BMI Record' : (isSignup ? 'Sign Up' : 'Login')}</h2>
+      <h2>{showBMICreation ? 'Create BMI Record' : (isSignup ? 'Sign Up' : 'Continue to Payment')}</h2>
+      {!showBMICreation && !isSignup && (
+        <p style={{ color: '#666', fontSize: 14, marginBottom: 20, textAlign: 'center' }}>
+          Please verify your details to proceed to payment
+        </p>
+      )}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div>
           <label style={{ display: 'block', fontSize: 14, marginBottom: 4 }}>Name</label>
@@ -382,7 +398,7 @@ function AuthForm({ onSubmit, screenId, serverBase }) {
             cursor: 'pointer'
           }}
         >
-          {showBMICreation ? 'Create BMI & Continue' : (isSignup ? 'Sign Up' : 'Login')}
+          {showBMICreation ? 'Create BMI & Continue' : (isSignup ? 'Sign Up' : 'Continue to Payment')}
         </button>
         {!showBMICreation && (
           <button
