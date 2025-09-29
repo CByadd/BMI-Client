@@ -18,6 +18,10 @@ function App() {
   const [showPayment, setShowPayment] = useState(false)
   const [showWaiting, setShowWaiting] = useState(false)
   const [showBMI, setShowBMI] = useState(false)
+  const [showProgress, setShowProgress] = useState(false)
+  const [showFortune, setShowFortune] = useState(false)
+  const [progressValue, setProgressValue] = useState(0)
+  const [fortuneMessage, setFortuneMessage] = useState('')
 
   // Load saved user
   useEffect(() => {
@@ -56,7 +60,8 @@ function App() {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
           }
         })
         
@@ -111,7 +116,10 @@ function App() {
       // Create/find user in database
       const res = await fetch(`${serverBase}/api/user`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
         body: JSON.stringify({ name: userData.name, mobile: userData.mobile })
       });
       const userResponse = await res.json();
@@ -139,18 +147,78 @@ function App() {
       // Notify server of payment success
       await fetch(`${serverBase}/api/payment-success`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
         body: JSON.stringify({ userId: user?.userId, bmiId })
       });
     } catch (e) {
       console.error('Payment success notification error:', e);
     }
     
-    // Show BMI after 5 seconds
+    // Show BMI after 5 seconds, then progress after another 5 seconds
     setTimeout(() => {
       setShowWaiting(false);
       setShowBMI(true);
+      
+      // After BMI is shown for 5 seconds, start progress
+      setTimeout(() => {
+        setShowBMI(false);
+        setShowProgress(true);
+        startProgressAnimation();
+      }, 5000);
     }, 5000);
+  }
+
+  const startProgressAnimation = () => {
+    setProgressValue(0);
+    const interval = setInterval(() => {
+      setProgressValue(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          // After progress completes, generate fortune
+          generateFortune();
+          return 100;
+        }
+        return prev + 1;
+      });
+    }, 50); // 5 seconds total
+  }
+
+  const generateFortune = async () => {
+    try {
+      const response = await fetch(`${serverBase}/api/fortune-generate`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({ bmiId })
+      });
+      
+      const result = await response.json();
+      if (result.ok) {
+        setFortuneMessage(result.fortuneMessage);
+        setShowProgress(false);
+        setShowFortune(true);
+        
+        // After fortune is shown for 5 seconds, redirect to dashboard
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 5000);
+      }
+    } catch (e) {
+      console.error('Fortune generation error:', e);
+      // Fallback: show default fortune
+      setFortuneMessage("Your health journey is just beginning! Every step forward is progress worth celebrating.");
+      setShowProgress(false);
+      setShowFortune(true);
+      
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 5000);
+    }
   }
 
   if (showAuth) {
@@ -167,6 +235,14 @@ function App() {
 
   if (showBMI && data) {
     return <BMIDisplay data={data} user={user} />
+  }
+
+  if (showProgress) {
+    return <ProgressScreen progress={progressValue} />
+  }
+
+  if (showFortune) {
+    return <FortuneScreen message={fortuneMessage} />
   }
 
   return (
@@ -217,7 +293,10 @@ function AuthForm({ onSubmit, screenId, serverBase }) {
       try {
         const bmiRes = await fetch(`${serverBase}/api/bmi`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
           body: JSON.stringify({ 
             heightCm: parseFloat(height), 
             weightKg: parseFloat(weight), 
@@ -266,8 +345,8 @@ function AuthForm({ onSubmit, screenId, serverBase }) {
           />
         </div>
         {showBMICreation && (
-          <>
-            <div>
+    <>
+      <div>
               <label style={{ display: 'block', fontSize: 14, marginBottom: 4 }}>Height (cm)</label>
               <input
                 type="number"
@@ -288,7 +367,7 @@ function AuthForm({ onSubmit, screenId, serverBase }) {
                 style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #ccc' }}
                 required
               />
-            </div>
+      </div>
           </>
         )}
         <button
@@ -439,6 +518,81 @@ function BMIDisplay({ data, user }) {
         <div style={{ fontSize: 16, marginBottom: 8 }}>Weight: {data.weight} kg</div>
         <div style={{ fontSize: 16, marginBottom: 8 }}>User: {user?.name}</div>
         <div style={{ fontSize: 16 }}>Mobile: {user?.mobile}</div>
+      </div>
+    </div>
+  )
+}
+
+function ProgressScreen({ progress }) {
+  return (
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      minHeight: '100vh',
+      fontFamily: 'system-ui, Arial',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      color: 'white',
+      padding: 20
+    }}>
+      <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 32 }}>Analyzing Your Health Data</div>
+      
+      <div style={{ width: '100%', maxWidth: 400, marginBottom: 24 }}>
+        <div style={{ 
+          width: '100%', 
+          height: 8, 
+          backgroundColor: 'rgba(255,255,255,0.3)', 
+          borderRadius: 4,
+          overflow: 'hidden'
+        }}>
+          <div style={{ 
+            width: `${progress}%`, 
+            height: '100%', 
+            backgroundColor: 'white', 
+            borderRadius: 4,
+            transition: 'width 0.1s ease'
+          }} />
+        </div>
+      </div>
+      
+      <div style={{ fontSize: 18, marginBottom: 16 }}>Generating personalized insights...</div>
+      <div style={{ fontSize: 24, fontWeight: 600 }}>{progress}%</div>
+    </div>
+  )
+}
+
+function FortuneScreen({ message }) {
+  return (
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      minHeight: '100vh',
+      fontFamily: 'system-ui, Arial',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      color: 'white',
+      padding: 20
+    }}>
+      <div style={{ fontSize: 48, marginBottom: 24 }}>🍪</div>
+      <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 32 }}>Your Fortune Cookie</div>
+      
+      <div style={{ 
+        background: 'rgba(255,255,255,0.1)', 
+        padding: 32, 
+        borderRadius: 16, 
+        textAlign: 'center',
+        maxWidth: 500,
+        border: '2px solid rgba(255,255,255,0.2)'
+      }}>
+        <div style={{ fontSize: 18, lineHeight: 1.6, color: '#FFF8E1' }}>
+          {message}
+        </div>
+      </div>
+      
+      <div style={{ fontSize: 16, marginTop: 32, opacity: 0.8 }}>
+        Thank you for using our BMI service!
       </div>
     </div>
   )
