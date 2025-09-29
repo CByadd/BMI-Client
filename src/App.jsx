@@ -42,20 +42,63 @@ function App() {
 
   useEffect(() => {
     async function run() {
-      if (!serverBase || !bmiId) return
+      if (!serverBase || !bmiId) {
+        console.log(`[CLIENT] Missing params - serverBase: ${serverBase}, bmiId: ${bmiId}`)
+        return
+      }
       setLoading(true)
       setError('')
       try {
-        const res = await fetch(`${serverBase}/api/bmi/${encodeURIComponent(bmiId)}`)
-        const json = await res.json()
-        if (!res.ok) throw new Error(json.error || 'Failed to fetch BMI')
+        const url = `${serverBase}/api/bmi/${encodeURIComponent(bmiId)}`
+        console.log(`[CLIENT] Fetching BMI from: ${url}`)
+        
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        console.log(`[CLIENT] Response status: ${res.status}`)
+        console.log(`[CLIENT] Response headers:`, Object.fromEntries(res.headers.entries()))
+        
+        const responseText = await res.text()
+        console.log(`[CLIENT] Raw response:`, responseText.substring(0, 200))
+        
+        if (!res.ok) {
+          console.error(`[CLIENT] Error response:`, responseText)
+          if (res.status === 404) {
+            setError('BMI record not found. Please create a new BMI record.')
+            setShowAuth(true)
+            return
+          }
+          throw new Error(`Server error ${res.status}: ${responseText}`)
+        }
+        
+        // Try to parse as JSON
+        let json
+        try {
+          json = JSON.parse(responseText)
+        } catch (parseError) {
+          console.error(`[CLIENT] JSON parse error:`, parseError)
+          throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`)
+        }
+        
+        console.log(`[CLIENT] BMI data received:`, json)
         setData(json)
         // Show auth if no user
         if (!user) {
           setShowAuth(true)
         }
       } catch (e) {
+        console.error('[CLIENT] Fetch error:', e)
         setError(e.message)
+        // If it's a JSON parse error, show auth form
+        if (e.message.includes('Invalid JSON') || e.message.includes('Unexpected token')) {
+          setError('Server returned invalid response. Please create a new BMI record.')
+          setShowAuth(true)
+        }
       } finally {
         setLoading(false)
       }
@@ -111,7 +154,7 @@ function App() {
   }
 
   if (showAuth) {
-    return <AuthForm onSubmit={handleAuth} />
+    return <AuthForm onSubmit={handleAuth} screenId={screenId} serverBase={serverBase} />
   }
 
   if (showPayment) {
@@ -157,20 +200,48 @@ function App() {
   )
 }
 
-function AuthForm({ onSubmit }) {
+function AuthForm({ onSubmit, screenId, serverBase }) {
   const [name, setName] = useState('')
   const [mobile, setMobile] = useState('')
+  const [height, setHeight] = useState('')
+  const [weight, setWeight] = useState('')
   const [isSignup, setIsSignup] = useState(false)
+  const [showBMICreation, setShowBMICreation] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!name.trim() || !mobile.trim()) return
+    
+    // If we have height/weight, create BMI first
+    if (showBMICreation && height && weight) {
+      try {
+        const bmiRes = await fetch(`${serverBase}/api/bmi`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            heightCm: parseFloat(height), 
+            weightKg: parseFloat(weight), 
+            screenId: screenId 
+          })
+        })
+        const bmiData = await bmiRes.json()
+        if (bmiRes.ok) {
+          console.log('BMI created:', bmiData)
+          // Update URL with new BMI ID
+          const newUrl = `${window.location.origin}${window.location.pathname}?screenId=${screenId}&bmiId=${bmiData.bmiId}${window.location.hash}`
+          window.history.replaceState({}, '', newUrl)
+        }
+      } catch (e) {
+        console.error('BMI creation error:', e)
+      }
+    }
+    
     onSubmit({ name: name.trim(), mobile: mobile.trim(), isSignup })
   }
 
   return (
     <div style={{ maxWidth: 400, margin: '40px auto', fontFamily: 'system-ui, Arial' }}>
-      <h2>{isSignup ? 'Sign Up' : 'Login'}</h2>
+      <h2>{showBMICreation ? 'Create BMI Record' : (isSignup ? 'Sign Up' : 'Login')}</h2>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div>
           <label style={{ display: 'block', fontSize: 14, marginBottom: 4 }}>Name</label>
@@ -194,6 +265,32 @@ function AuthForm({ onSubmit }) {
             required
           />
         </div>
+        {showBMICreation && (
+          <>
+            <div>
+              <label style={{ display: 'block', fontSize: 14, marginBottom: 4 }}>Height (cm)</label>
+              <input
+                type="number"
+                value={height}
+                onChange={(e) => setHeight(e.target.value)}
+                placeholder="Enter height in cm"
+                style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #ccc' }}
+                required
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 14, marginBottom: 4 }}>Weight (kg)</label>
+              <input
+                type="number"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                placeholder="Enter weight in kg"
+                style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #ccc' }}
+                required
+              />
+            </div>
+          </>
+        )}
         <button
           type="submit"
           style={{
@@ -206,11 +303,28 @@ function AuthForm({ onSubmit }) {
             cursor: 'pointer'
           }}
         >
-          {isSignup ? 'Sign Up' : 'Login'}
+          {showBMICreation ? 'Create BMI & Continue' : (isSignup ? 'Sign Up' : 'Login')}
         </button>
+        {!showBMICreation && (
+          <button
+            type="button"
+            onClick={() => setIsSignup(!isSignup)}
+            style={{
+              padding: 8,
+              background: 'transparent',
+              color: '#667eea',
+              border: 'none',
+              fontSize: 14,
+              cursor: 'pointer',
+              textDecoration: 'underline'
+            }}
+          >
+            {isSignup ? 'Already have an account? Login' : 'New user? Sign up'}
+          </button>
+        )}
         <button
           type="button"
-          onClick={() => setIsSignup(!isSignup)}
+          onClick={() => setShowBMICreation(!showBMICreation)}
           style={{
             padding: 8,
             background: 'transparent',
@@ -221,7 +335,7 @@ function AuthForm({ onSubmit }) {
             textDecoration: 'underline'
           }}
         >
-          {isSignup ? 'Already have an account? Login' : 'New user? Sign up'}
+          {showBMICreation ? 'Hide BMI Creation' : 'Create New BMI Record'}
         </button>
       </form>
     </div>
