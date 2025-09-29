@@ -13,9 +13,23 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [data, setData] = useState(null)
+  const [user, setUser] = useState(null)
+  const [showAuth, setShowAuth] = useState(false)
+  const [showPayment, setShowPayment] = useState(false)
+  const [showWaiting, setShowWaiting] = useState(false)
+  const [showBMI, setShowBMI] = useState(false)
+
+  // Load saved user
+  useEffect(() => {
+    const saved = localStorage.getItem('bmi_user')
+    if (saved) {
+      try {
+        setUser(JSON.parse(saved))
+      } catch {}
+    }
+  }, [])
 
   useEffect(() => {
-    // Infer server origin from current location if same host; allow override via hash (#server=...)
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
     const fromHash = hash.get('server')
     const base = fromHash || `${window.location.origin.replace(/\/$/, '')}`.replace(/\/$/, '')
@@ -32,6 +46,10 @@ function App() {
         const json = await res.json()
         if (!res.ok) throw new Error(json.error || 'Failed to fetch BMI')
         setData(json)
+        // Show auth if no user
+        if (!user) {
+          setShowAuth(true)
+        }
       } catch (e) {
         setError(e.message)
       } finally {
@@ -39,7 +57,40 @@ function App() {
       }
     }
     run()
-  }, [serverBase, bmiId])
+  }, [serverBase, bmiId, user])
+
+  const handleAuth = (userData) => {
+    setUser(userData)
+    localStorage.setItem('bmi_user', JSON.stringify(userData))
+    setShowAuth(false)
+    setShowPayment(true)
+  }
+
+  const handlePaymentSuccess = () => {
+    setShowPayment(false)
+    setShowWaiting(true)
+    // Show BMI after 5 seconds
+    setTimeout(() => {
+      setShowWaiting(false)
+      setShowBMI(true)
+    }, 5000)
+  }
+
+  if (showAuth) {
+    return <AuthForm onSubmit={handleAuth} />
+  }
+
+  if (showPayment) {
+    return <PaymentForm user={user} onSuccess={handlePaymentSuccess} />
+  }
+
+  if (showWaiting) {
+    return <WaitingScreen />
+  }
+
+  if (showBMI && data) {
+    return <BMIDisplay data={data} user={user} />
+  }
 
   return (
     <div style={{ maxWidth: 600, margin: '24px auto', fontFamily: 'system-ui, Arial' }}>
@@ -68,6 +119,179 @@ function App() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function AuthForm({ onSubmit }) {
+  const [name, setName] = useState('')
+  const [mobile, setMobile] = useState('')
+  const [isSignup, setIsSignup] = useState(false)
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!name.trim() || !mobile.trim()) return
+    onSubmit({ name: name.trim(), mobile: mobile.trim(), isSignup })
+  }
+
+  return (
+    <div style={{ maxWidth: 400, margin: '40px auto', fontFamily: 'system-ui, Arial' }}>
+      <h2>{isSignup ? 'Sign Up' : 'Login'}</h2>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 14, marginBottom: 4 }}>Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Enter your name"
+            style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #ccc' }}
+            required
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 14, marginBottom: 4 }}>Mobile Number</label>
+          <input
+            type="tel"
+            value={mobile}
+            onChange={(e) => setMobile(e.target.value)}
+            placeholder="Enter mobile number"
+            style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #ccc' }}
+            required
+          />
+        </div>
+        <button
+          type="submit"
+          style={{
+            padding: 12,
+            background: '#667eea',
+            color: 'white',
+            border: 'none',
+            borderRadius: 8,
+            fontSize: 16,
+            cursor: 'pointer'
+          }}
+        >
+          {isSignup ? 'Sign Up' : 'Login'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsSignup(!isSignup)}
+          style={{
+            padding: 8,
+            background: 'transparent',
+            color: '#667eea',
+            border: 'none',
+            fontSize: 14,
+            cursor: 'pointer',
+            textDecoration: 'underline'
+          }}
+        >
+          {isSignup ? 'Already have an account? Login' : 'New user? Sign up'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+function PaymentForm({ user, onSuccess }) {
+  const [processing, setProcessing] = useState(false)
+
+  const handlePayment = async () => {
+    setProcessing(true)
+    // Simulate payment processing
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    setProcessing(false)
+    onSuccess()
+  }
+
+  return (
+    <div style={{ maxWidth: 400, margin: '40px auto', fontFamily: 'system-ui, Arial' }}>
+      <h2>Payment</h2>
+      <div style={{ background: '#f5f5f5', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+        <div style={{ fontSize: 14, color: '#666' }}>User: {user?.name}</div>
+        <div style={{ fontSize: 14, color: '#666' }}>Mobile: {user?.mobile}</div>
+      </div>
+      <div style={{ background: '#f5f5f5', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>BMI Analysis</div>
+        <div style={{ fontSize: 14, color: '#666' }}>Price: ₹99</div>
+      </div>
+      <button
+        onClick={handlePayment}
+        disabled={processing}
+        style={{
+          width: '100%',
+          padding: 12,
+          background: processing ? '#ccc' : '#667eea',
+          color: 'white',
+          border: 'none',
+          borderRadius: 8,
+          fontSize: 16,
+          cursor: processing ? 'not-allowed' : 'pointer'
+        }}
+      >
+        {processing ? 'Processing...' : 'Pay ₹99'}
+      </button>
+    </div>
+  )
+}
+
+function WaitingScreen() {
+  return (
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      minHeight: '100vh',
+      fontFamily: 'system-ui, Arial',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      color: 'white'
+    }}>
+      <div style={{ fontSize: 24, fontWeight: 600, marginBottom: 16 }}>Processing BMI Analysis</div>
+      <div style={{ fontSize: 16, marginBottom: 32 }}>Please wait while we calculate your BMI...</div>
+      <div style={{ 
+        width: 40, 
+        height: 40, 
+        border: '4px solid rgba(255,255,255,0.3)', 
+        borderTop: '4px solid white', 
+        borderRadius: '50%', 
+        animation: 'spin 1s linear infinite' 
+      }}></div>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function BMIDisplay({ data, user }) {
+  return (
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      minHeight: '100vh',
+      fontFamily: 'system-ui, Arial',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      color: 'white',
+      padding: 20
+    }}>
+      <div style={{ fontSize: 28, fontWeight: 600, marginBottom: 8 }}>Your BMI Result</div>
+      <div style={{ fontSize: 48, fontWeight: 700, marginBottom: 16 }}>
+        {data.bmi?.toFixed?.(1) ?? data.bmi}
+      </div>
+      <div style={{ fontSize: 20, marginBottom: 32 }}>{data.category}</div>
+      <div style={{ background: 'rgba(255,255,255,0.1)', padding: 20, borderRadius: 12, textAlign: 'center' }}>
+        <div style={{ fontSize: 16, marginBottom: 8 }}>Height: {data.height} cm</div>
+        <div style={{ fontSize: 16, marginBottom: 8 }}>Weight: {data.weight} kg</div>
+        <div style={{ fontSize: 16, marginBottom: 8 }}>User: {user?.name}</div>
+        <div style={{ fontSize: 16 }}>Mobile: {user?.mobile}</div>
+      </div>
     </div>
   )
 }
