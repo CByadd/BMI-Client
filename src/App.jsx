@@ -36,6 +36,10 @@ function App() {
     setServerBase(base)
   }, [])
 
+    useEffect(() => {
+    setServerBase('https://relieved-sparrow-fairly.ngrok-free.app')
+  }, [])
+
   useEffect(() => {
     async function run() {
       if (!serverBase || !bmiId) return
