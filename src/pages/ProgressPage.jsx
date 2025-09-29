@@ -121,5 +121,4 @@ function ProgressPage({ progressValue }) {
     </div>
   )
 }
-
 export default ProgressPage

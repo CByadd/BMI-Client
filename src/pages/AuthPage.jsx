@@ -180,5 +180,4 @@ function AuthPage({ onAuth, screenId, serverBase }) {
     </div>
   )
 }
-
 export default AuthPage

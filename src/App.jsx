@@ -21,7 +21,7 @@ function App() {
   const [error, setError] = useState('')
   const [data, setData] = useState(null)
   const [user, setUser] = useState(null)
-  const [currentPage, setCurrentPage] = useState('auth')
+  const [currentPage, setCurrentPage] = useState('loading')
   const [progressValue, setProgressValue] = useState(0)
   const [fortuneMessage, setFortuneMessage] = useState('')
 
@@ -52,7 +52,14 @@ function App() {
   }, [])
 
   useEffect(() => {
-    setServerBase('https://relieved-sparrow-fairly.ngrok-free.app')
+    // Use the server base from URL hash if available, otherwise use ngrok
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const fromHash = hash.get('server')
+    if (fromHash) {
+      setServerBase(fromHash)
+    } else {
+      setServerBase('https://relieved-sparrow-fairly.ngrok-free.app')
+    }
   }, [])
 
   useEffect(() => {
@@ -103,7 +110,13 @@ function App() {
         
         console.log(`[CLIENT] BMI data received:`, json)
         setData(json)
-        setCurrentPage('auth')
+        // Only set to auth if we're not already in a flow
+        if (currentPage === 'loading' || currentPage === 'auth') {
+          console.log(`[CLIENT] Setting current page to auth (current: ${currentPage})`)
+          setCurrentPage('auth')
+        } else {
+          console.log(`[CLIENT] Not changing page, current: ${currentPage}`)
+        }
       } catch (e) {
         console.error('[CLIENT] Fetch error:', e)
         setError(e.message)
@@ -116,9 +129,10 @@ function App() {
       }
     }
     run()
-  }, [serverBase, bmiId, user, currentPage])
+  }, [serverBase, bmiId]) // Removed user and currentPage from dependencies
 
   const handleAuth = async (userData) => {
+    console.log('[AUTH] Starting authentication for:', userData);
     try {
       const res = await fetch(`${serverBase}/api/user`, {
         method: 'POST',
@@ -131,13 +145,16 @@ function App() {
       const userResponse = await res.json();
       if (!res.ok) throw new Error(userResponse.error || 'Failed to create user');
       
+      console.log('[AUTH] User created successfully:', userResponse);
       setUser({ ...userData, userId: userResponse.userId });
       localStorage.setItem('bmi_user', JSON.stringify({ ...userData, userId: userResponse.userId }));
+      console.log('[AUTH] Setting current page to payment');
       setCurrentPage('payment');
     } catch (e) {
-      console.error('Auth error:', e);
+      console.error('[AUTH] Auth error:', e);
       setUser(userData);
       localStorage.setItem('bmi_user', JSON.stringify(userData));
+      console.log('[AUTH] Setting current page to payment (fallback)');
       setCurrentPage('payment');
     }
   }
@@ -199,7 +216,7 @@ function App() {
         
         setTimeout(() => {
           setCurrentPage('dashboard');
-        }, 5000);
+        }, 10000); // Increased from 5 seconds to 10 seconds
       }
     } catch (e) {
       console.error('Fortune generation error:', e);
@@ -208,7 +225,7 @@ function App() {
       
       setTimeout(() => {
         setCurrentPage('dashboard');
-      }, 5000);
+      }, 10000); // Increased from 5 seconds to 10 seconds
     }
   }
 
@@ -250,7 +267,7 @@ function App() {
     case 'progress':
       return <ProgressPage {...pageProps} />
     case 'fortune':
-      return <FortunePage {...pageProps} />
+      return <FortunePage message={fortuneMessage} {...pageProps} />
     case 'dashboard':
       return <DashboardPage {...pageProps} />
     default:

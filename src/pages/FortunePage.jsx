@@ -71,6 +71,7 @@ function FortunePage({ message }) {
               </p>
             </div>
           </div>
+
         </div>
 
         <div className="space-y-4">
@@ -82,7 +83,7 @@ function FortunePage({ message }) {
           </div>
           
           <p className="text-sm text-gray-500">
-            Redirecting to your dashboard in a few seconds...
+            Redirecting to your dashboard in 10 seconds...
           </p>
           
           <div className="flex items-center justify-center space-x-1">
@@ -95,5 +96,4 @@ function FortunePage({ message }) {
     </div>
   )
 }
-
 export default FortunePage

@@ -152,5 +152,4 @@ function BMIResultPage({ data, user }) {
     </div>
   )
 }
-
 export default BMIResultPage

@@ -137,5 +137,4 @@ function PaymentPage({ user, onPaymentSuccess }) {
     </div>
   )
 }
-
 export default PaymentPage

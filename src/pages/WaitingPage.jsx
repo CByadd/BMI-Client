@@ -70,5 +70,4 @@ function WaitingPage() {
     </div>
   )
 }
-
 export default WaitingPage
