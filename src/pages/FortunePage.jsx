@@ -1,10 +1,21 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
+import QRCode from 'qrcode'
 
-function FortunePage({ message }) {
+function FortunePage({ message, data }) {
   const containerRef = useRef(null)
   const cookieRef = useRef(null)
   const messageRef = useRef(null)
+  const [qrCodeUrl, setQrCodeUrl] = useState('')
+
+  // Generate QR code
+  useEffect(() => {
+    if (data?.webUrl) {
+      QRCode.toDataURL(data.webUrl, { width: 200, margin: 2 })
+        .then(url => setQrCodeUrl(url))
+        .catch(err => console.error('QR Code generation failed:', err))
+    }
+  }, [data])
 
   useEffect(() => {
     if (containerRef.current && cookieRef.current && messageRef.current) {
@@ -73,6 +84,25 @@ function FortunePage({ message }) {
           </div>
 
         </div>
+
+        {/* QR Code Section */}
+        {qrCodeUrl && (
+          <div className="card border-2 border-primary-200 bg-white mb-8">
+            <div className="p-6 text-center">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Scan to continue on mobile</h3>
+              <div className="flex justify-center">
+                <img 
+                  src={qrCodeUrl} 
+                  alt="QR Code" 
+                  className="w-48 h-48 border-2 border-gray-200 rounded-lg"
+                />
+              </div>
+              <p className="text-sm text-gray-600 mt-3">
+                Use your mobile device to scan this QR code
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-4">
           <div className="flex items-center justify-center space-x-2 text-primary-600">

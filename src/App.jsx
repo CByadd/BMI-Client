@@ -16,6 +16,10 @@ function App() {
   const params = useQueryParams()
   const screenId = params.get('screenId') || ''
   const bmiId = params.get('bmiId') || ''
+  const appVersion = params.get('appVersion') || '' // Detect specific app version
+  const fromPlayerAppF2 = appVersion === 'f2' // Detect if coming from PlayerApp BMI F2
+  const fromPlayerAppF1 = appVersion === 'f1' // Detect if coming from PlayerApp BMI F1
+  const fromPlayerApp = fromPlayerAppF1 || fromPlayerAppF2 // Detect if coming from any PlayerApp version
   const [serverBase, setServerBase] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -110,12 +114,24 @@ function App() {
         
         console.log(`[CLIENT] BMI data received:`, json)
         setData(json)
-        // Only set to auth if we're not already in a flow
-        if (currentPage === 'loading' || currentPage === 'auth') {
-          console.log(`[CLIENT] Setting current page to auth (current: ${currentPage})`)
+        
+        // Handle different PlayerApp versions
+        if (fromPlayerAppF2) {
+          console.log(`[CLIENT] Coming from PlayerApp BMI F2, auto-progressing through flow`)
+          setCurrentPage('bmi-result')
+          
+          // F2: Auto-progress through the flow
+          setTimeout(() => {
+            setCurrentPage('progress')
+            startProgressAnimation()
+          }, 5000)
+        } else if (fromPlayerAppF1) {
+          console.log(`[CLIENT] Coming from PlayerApp BMI F1, showing login/payment flow`)
+          // F1: Show login/payment flow first, then synchronized flow after payment
           setCurrentPage('auth')
         } else {
-          console.log(`[CLIENT] Not changing page, current: ${currentPage}`)
+          // Regular web users: show login/payment flow
+          setCurrentPage('auth')
         }
       } catch (e) {
         console.error('[CLIENT] Fetch error:', e)
@@ -169,7 +185,7 @@ function App() {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true'
         },
-        body: JSON.stringify({ userId: user?.userId, bmiId })
+        body: JSON.stringify({ userId: user?.userId, bmiId, appVersion })
       });
     } catch (e) {
       console.error('Payment success notification error:', e);
@@ -206,7 +222,7 @@ function App() {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true'
         },
-        body: JSON.stringify({ bmiId })
+        body: JSON.stringify({ bmiId, appVersion })
       });
       
       const result = await response.json();
@@ -230,12 +246,12 @@ function App() {
   }
 
   if (loading) {
-    return (
+  return (
       <div className="min-h-screen gradient-bg flex items-center justify-center">
         <div className="text-center">
           <div className="loading-spinner mx-auto mb-4"></div>
           <p className="text-gray-600 font-medium">Loading...</p>
-        </div>
+      </div>
       </div>
     )
   }
