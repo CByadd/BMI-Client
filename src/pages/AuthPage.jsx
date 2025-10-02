@@ -163,16 +163,16 @@ function AuthPage({ onAuth, screenId, serverBase }) {
                 onClick={() => setIsSignup(!isSignup)}
                 className="text-primary-600 hover:text-primary-700 font-medium text-sm transition-colors"
               >
-                {isSignup ? 'Already have an account? Sign in' : 'New to BMI Pro? Create account'}
+                {isSignup ? 'Already have an account? Sign in' : 'New? Create an account'}
               </button>
               
-              <button
+              {/* <button
                 type="button"
                 onClick={() => setShowBMICreation(!showBMICreation)}
                 className="text-accent-600 hover:text-accent-700 font-medium text-sm transition-colors"
               >
                 {showBMICreation ? 'Hide BMI Creation' : 'Create New BMI Record'}
-              </button>
+              </button> */}
             </div>
           </form>
         </div>

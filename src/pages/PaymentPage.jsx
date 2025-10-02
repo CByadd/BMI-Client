@@ -79,12 +79,12 @@ function PaymentPage({ user, onPaymentSuccess }) {
           <div className="card border-2 border-primary-200">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="font-bold text-xl text-gray-900">BMI Pro Analysis</h3>
-                <p className="text-gray-600 text-sm">Complete health assessment with AI insights</p>
+                <h3 className="font-bold text-xl text-gray-900">Well2Day BMI Analysis</h3>
+                <p className="text-gray-600 text-sm">Complete health assessment</p>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-primary-600">₹99</div>
-                <div className="text-sm text-gray-500 line-through">₹199</div>
+                <div className="text-3xl font-bold text-primary-600">₹9</div>
+                {/* <div className="text-sm text-gray-500 line-through">₹199</div> */}
               </div>
             </div>
             
@@ -120,7 +120,7 @@ function PaymentPage({ user, onPaymentSuccess }) {
                   Processing Payment...
                 </div>
               ) : (
-                'Pay ₹99 - Secure Payment'
+                'Pay ₹9 - Secure Payment'
               )}
             </button>
           </div>

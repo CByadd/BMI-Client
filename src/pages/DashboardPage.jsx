@@ -60,23 +60,21 @@ function DashboardPage() {
         <div className="max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
+              <div className=" bg-primary-600 rounded-xl flex items-center justify-center">
+                <img src="https://res.cloudinary.com/dvmuf6jfj/image/upload/v1759391612/Well2Day/imgi_1_Group_2325_f1mz13.png" alt="logo" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">BMI Pro</h1>
-                <p className="text-sm text-gray-600">Professional Health Analysis</p>
+                {/* <h1 className="text-xl font-bold text-gray-900">Well2Day</h1> */}
+                {/* <p className="text-sm text-gray-600">Professional Health Analysis</p> */}
               </div>
             </div>
             
-            <button 
+            {/* <button 
               onClick={handleStartNewBMI}
               className="btn-primary cta-button"
             >
               New BMI Check
-            </button>
+            </button> */}
           </div>
         </div>
       </div>
@@ -178,12 +176,12 @@ function DashboardPage() {
             <p className="text-gray-600 mb-6">
               Track your progress over time with regular BMI checks and see how your health journey evolves.
             </p>
-            <button 
+            {/* <button 
               onClick={handleStartNewBMI}
               className="btn-primary cta-button text-lg px-8 py-4"
             >
               Start New BMI Check
-            </button>
+            </button> */}
           </div>
         </div>
       </div>
