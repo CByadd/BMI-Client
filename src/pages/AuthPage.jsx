@@ -1,13 +1,10 @@
 import { useEffect, useState, useRef } from 'react'
 import { gsap } from 'gsap'
 
-function AuthPage({ onAuth, screenId, serverBase }) {
+function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
   const [name, setName] = useState('')
   const [mobile, setMobile] = useState('')
-  const [height, setHeight] = useState('')
-  const [weight, setWeight] = useState('')
   const [isSignup, setIsSignup] = useState(false)
-  const [showBMICreation, setShowBMICreation] = useState(false)
   const containerRef = useRef(null)
   const formRef = useRef(null)
 
@@ -21,7 +18,13 @@ function AuthPage({ onAuth, screenId, serverBase }) {
         setIsSignup(false)
       } catch {}
     }
-  }, [])
+    
+    // For direct visits, just show login form
+    const isDirectVisit = !screenId && !bmiId
+    if (isDirectVisit) {
+      setIsSignup(false) // Default to login for existing users
+    }
+  }, [screenId, bmiId])
 
   useEffect(() => {
     if (containerRef.current && formRef.current) {
@@ -50,30 +53,7 @@ function AuthPage({ onAuth, screenId, serverBase }) {
       ease: "power2.inOut"
     })
     
-    if (showBMICreation && height && weight) {
-      try {
-        const bmiRes = await fetch(`${serverBase}/api/bmi`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
-          },
-          body: JSON.stringify({ 
-            heightCm: parseFloat(height), 
-            weightKg: parseFloat(weight), 
-            screenId: screenId 
-          })
-        })
-        const bmiData = await bmiRes.json()
-        if (bmiRes.ok) {
-          console.log('BMI created:', bmiData)
-          const newUrl = `${window.location.origin}${window.location.pathname}?screenId=${screenId}&bmiId=${bmiData.bmiId}${window.location.hash}`
-          window.history.replaceState({}, '', newUrl)
-        }
-      } catch (e) {
-        console.error('BMI creation error:', e)
-      }
-    }
+    // BMI creation removed - client is read-only for analytics
     
     onAuth({ name: name.trim(), mobile: mobile.trim(), isSignup })
   }
@@ -88,14 +68,12 @@ function AuthPage({ onAuth, screenId, serverBase }) {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {showBMICreation ? 'Create BMI Record' : (isSignup ? 'Create Account' : 'Welcome Back')}
+            {isSignup ? 'Create Account' : 'Welcome Back'}
           </h1>
           <p className="text-gray-600">
-            {showBMICreation 
-              ? 'Enter your details to create a new BMI record'
-              : isSignup 
-                ? 'Join thousands who trust BMI Pro for health insights'
-                : 'Please verify your details to continue'
+            {isSignup 
+              ? 'Join to access your BMI analytics dashboard'
+              : 'Login to view your health analytics and trends'
             }
           </p>
         </div>
@@ -126,35 +104,10 @@ function AuthPage({ onAuth, screenId, serverBase }) {
               />
             </div>
 
-            {showBMICreation && (
-              <>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Height (cm)</label>
-                  <input
-                    type="number"
-                    value={height}
-                    onChange={(e) => setHeight(e.target.value)}
-                    placeholder="Enter height in cm"
-                    className="input-field"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Weight (kg)</label>
-                  <input
-                    type="number"
-                    value={weight}
-                    onChange={(e) => setWeight(e.target.value)}
-                    placeholder="Enter weight in kg"
-                    className="input-field"
-                    required
-                  />
-                </div>
-              </>
-            )}
+            {/* BMI creation fields removed - client is read-only */}
 
             <button type="submit" className="w-full btn-primary">
-              {showBMICreation ? 'Create BMI & Continue' : (isSignup ? 'Create Account' : 'Continue to Payment')}
+              {isSignup ? 'Create Account' : 'Login to Dashboard'}
             </button>
 
             <div className="flex flex-col space-y-3">
@@ -165,6 +118,17 @@ function AuthPage({ onAuth, screenId, serverBase }) {
               >
                 {isSignup ? 'Already have an account? Sign in' : 'New? Create an account'}
               </button>
+              
+              {/* Show dashboard link for existing users on direct visits */}
+              {!screenId && !bmiId && localStorage.getItem('bmi_user') && (
+                <button
+                  type="button"
+                  onClick={() => window.location.href = '/dashboard'}
+                  className="text-accent-600 hover:text-accent-700 font-medium text-sm transition-colors"
+                >
+                  View My Dashboard →
+                </button>
+              )}
               
               {/* <button
                 type="button"

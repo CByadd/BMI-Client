@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { gsap } from 'gsap'
 
-function WaitingPage() {
+function WaitingPage({ onNavigate, data, appVersion }) {
   const containerRef = useRef(null)
   const pulseRef = useRef(null)
 
@@ -31,7 +31,17 @@ function WaitingPage() {
         ease: "power2.inOut"
       })
     }
-  }, [])
+    
+    // Auto-progress for F2 flow
+    if (appVersion === 'f2') {
+      const timer = setTimeout(() => {
+        console.log('[WAITING] F2 flow - auto-progressing to BMI result');
+        onNavigate('bmi-result');
+      }, 3000); // 3 seconds for F2
+      
+      return () => clearTimeout(timer);
+    }
+  }, [appVersion, onNavigate])
 
   return (
     <div className="min-h-screen gradient-bg flex items-center justify-center p-4">

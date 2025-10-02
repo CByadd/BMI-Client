@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { gsap } from 'gsap'
 
-function BMIResultPage({ data, user }) {
+function BMIResultPage({ data, user, onNavigate, appVersion }) {
   const containerRef = useRef(null)
   const bmiValueRef = useRef(null)
   const cardsRef = useRef(null)
@@ -58,7 +58,17 @@ function BMIResultPage({ data, user }) {
         }
       )
     }
-  }, [data])
+    
+    // Auto-progress for F2 flow
+    if (appVersion === 'f2') {
+      const timer = setTimeout(() => {
+        console.log('[BMI-RESULT] F2 flow - auto-progressing to dashboard');
+        onNavigate('dashboard');
+      }, 5000); // 5 seconds to view BMI result
+      
+      return () => clearTimeout(timer);
+    }
+  }, [data, appVersion, onNavigate])
 
   if (!data) return null
 

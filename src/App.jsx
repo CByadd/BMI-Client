@@ -7,6 +7,7 @@ import BMIResultPage from './pages/BMIResultPage'
 import ProgressPage from './pages/ProgressPage'
 import FortunePage from './pages/FortunePage'
 import DashboardPage from './pages/DashboardPage'
+import AnalyticsPage from './pages/AnalyticsPage'
 
 function useQueryParams() {
   return useMemo(() => new URLSearchParams(window.location.search), [])
@@ -29,14 +30,40 @@ function App() {
   const [progressValue, setProgressValue] = useState(0)
   const [fortuneMessage, setFortuneMessage] = useState('')
 
-  // Check if we should show dashboard directly
+  // Check if we should show dashboard or analytics directly
   useEffect(() => {
     if (window.location.pathname === '/dashboard' || window.location.pathname.includes('dashboard')) {
       setCurrentPage('dashboard')
       setLoading(false)
       return
     }
-  }, [])
+    if (window.location.pathname === '/analytics' || window.location.pathname.includes('analytics')) {
+      setCurrentPage('analytics')
+      setLoading(false)
+      return
+    }
+    
+    // Check if user is visiting directly (not via QR code) and has saved login
+    const isDirectVisit = !bmiId && !screenId // No QR code parameters
+    if (isDirectVisit) {
+      const savedUser = localStorage.getItem('bmi_user')
+      if (savedUser) {
+        try {
+          const userData = JSON.parse(savedUser)
+          if (userData.userId) {
+            console.log('[CLIENT] Direct visit with saved user, showing dashboard')
+            setUser(userData)
+            setCurrentPage('dashboard')
+            setLoading(false)
+            return
+          }
+        } catch (e) {
+          console.error('[CLIENT] Error parsing saved user:', e)
+          localStorage.removeItem('bmi_user') // Clean up corrupted data
+        }
+      }
+    }
+  }, [bmiId, screenId])
 
   // Load saved user
   useEffect(() => {
@@ -68,7 +95,19 @@ function App() {
 
   useEffect(() => {
     async function run() {
-      if (currentPage === 'dashboard') return
+      if (currentPage === 'dashboard' || currentPage === 'analytics') return
+      
+      // Check if this is a QR code visit (has screenId and bmiId)
+      const isQRCodeVisit = !!(screenId && bmiId)
+      
+      if (!isQRCodeVisit) {
+        // Direct visit without QR code parameters
+        console.log(`[CLIENT] Direct visit - no QR code parameters`)
+        setCurrentPage('auth')
+        setLoading(false)
+        return
+      }
+      
       if (!serverBase || !bmiId) {
         console.log(`[CLIENT] Missing params - serverBase: ${serverBase}, bmiId: ${bmiId}`)
         setLoading(false)
@@ -114,6 +153,33 @@ function App() {
         
         console.log(`[CLIENT] BMI data received:`, json)
         setData(json)
+        
+        // If user is already logged in and BMI record has no user, link them (F2 only)
+        const savedUser = localStorage.getItem('bmi_user')
+        if (savedUser && !json.userId && fromPlayerAppF2) {
+          try {
+            const userData = JSON.parse(savedUser)
+            if (userData.userId) {
+              console.log('[CLIENT] F2 Flow: Auto-linking logged-in user to BMI record')
+              await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'ngrok-skip-browser-warning': 'true'
+                },
+                body: JSON.stringify({ userId: userData.userId })
+              });
+              console.log('[CLIENT] F2 Flow: Successfully auto-linked user to BMI record');
+              
+              // Update the data with user info
+              json.userId = userData.userId;
+              json.user = userData;
+              setData(json);
+            }
+          } catch (linkError) {
+            console.error('[CLIENT] F2 Flow: Error auto-linking user:', linkError);
+          }
+        }
         
         // Handle different PlayerApp versions
         if (fromPlayerAppF2) {
@@ -164,19 +230,99 @@ function App() {
       console.log('[AUTH] User created successfully:', userResponse);
       setUser({ ...userData, userId: userResponse.userId });
       localStorage.setItem('bmi_user', JSON.stringify({ ...userData, userId: userResponse.userId }));
-      console.log('[AUTH] Setting current page to payment');
-      setCurrentPage('payment');
+      
+      // Check if this is a QR code visit or direct visit
+      const isQRCodeVisit = !!(screenId && bmiId)
+      
+      // If F2 QR code visit, link the user to the BMI record immediately after login
+      if (isQRCodeVisit && bmiId && userResponse.userId && fromPlayerAppF2) {
+        try {
+          console.log('[AUTH] F2 Flow: Linking user to BMI record immediately:', bmiId);
+          await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true'
+            },
+            body: JSON.stringify({ userId: userResponse.userId })
+          });
+          console.log('[AUTH] F2 Flow: Successfully linked user to BMI record');
+        } catch (linkError) {
+          console.error('[AUTH] F2 Flow: Error linking user to BMI:', linkError);
+          // Continue with flow even if linking fails
+        }
+      }
+      // Note: For F1 flow, user linking happens after payment completion
+      
+      if (!isQRCodeVisit) {
+        // Direct visit - go straight to dashboard
+        console.log('[AUTH] Direct visit - going to dashboard');
+        setCurrentPage('dashboard');
+      } else if (fromPlayerAppF2) {
+        // F2 flow: Auth -> Waiting -> BMI Result -> Dashboard
+        console.log('[AUTH] F2 flow - going to waiting');
+        setCurrentPage('waiting');
+      } else {
+        // F1 flow: Auth -> Payment -> Waiting -> BMI Result -> Fortune -> Dashboard
+        console.log('[AUTH] F1 flow - going to payment');
+        setCurrentPage('payment');
+      }
     } catch (e) {
       console.error('[AUTH] Auth error:', e);
       setUser(userData);
       localStorage.setItem('bmi_user', JSON.stringify(userData));
-      console.log('[AUTH] Setting current page to payment (fallback)');
-      setCurrentPage('payment');
+      
+      // Try to link user even in fallback (only for F2 flow)
+      const isQRCodeVisit = !!(screenId && bmiId)
+      if (isQRCodeVisit && bmiId && userData.userId && fromPlayerAppF2) {
+        try {
+          console.log('[AUTH] Fallback F2: Linking user to BMI record:', bmiId);
+          await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true'
+            },
+            body: JSON.stringify({ userId: userData.userId })
+          });
+          console.log('[AUTH] Fallback F2: Successfully linked user to BMI record');
+        } catch (linkError) {
+          console.error('[AUTH] Fallback F2: Error linking user to BMI:', linkError);
+        }
+      }
+      
+      // Same logic for fallback
+      if (!isQRCodeVisit) {
+        setCurrentPage('dashboard');
+      } else if (fromPlayerAppF2) {
+        setCurrentPage('waiting');
+      } else {
+        setCurrentPage('payment');
+      }
     }
   }
 
   const handlePaymentSuccess = async () => {
     setCurrentPage('waiting');
+    
+    // For F1 flow, link user to BMI record after payment completion
+    if (fromPlayerAppF1 && bmiId && user?.userId) {
+      try {
+        console.log('[PAYMENT] F1 Flow: Linking user to BMI record after payment:', bmiId);
+        await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({ userId: user.userId })
+        });
+        console.log('[PAYMENT] F1 Flow: Successfully linked user to BMI record');
+      } catch (linkError) {
+        console.error('[PAYMENT] F1 Flow: Error linking user to BMI:', linkError);
+        // Continue with flow even if linking fails
+      }
+    }
     
     try {
       await fetch(`${serverBase}/api/payment-success`, {
@@ -216,6 +362,20 @@ function App() {
 
   const generateFortune = async () => {
     try {
+      // Use fortune from database if available
+      if (data?.fortune) {
+        console.log('[FORTUNE] Using fortune from database:', data.fortune);
+        setFortuneMessage(data.fortune);
+        setCurrentPage('fortune');
+        
+        setTimeout(() => {
+          setCurrentPage('dashboard');
+        }, 10000);
+        return;
+      }
+      
+      // Fallback: generate fortune if not in database (for backward compatibility)
+      console.log('[FORTUNE] No fortune in database, generating new one');
       const response = await fetch(`${serverBase}/api/fortune-generate`, {
         method: 'POST',
         headers: { 
@@ -232,7 +392,7 @@ function App() {
         
         setTimeout(() => {
           setCurrentPage('dashboard');
-        }, 10000); // Increased from 5 seconds to 10 seconds
+        }, 10000);
       }
     } catch (e) {
       console.error('Fortune generation error:', e);
@@ -241,7 +401,7 @@ function App() {
       
       setTimeout(() => {
         setCurrentPage('dashboard');
-      }, 10000); // Increased from 5 seconds to 10 seconds
+      }, 10000);
     }
   }
 
@@ -266,6 +426,9 @@ function App() {
     error,
     progressValue,
     fortuneMessage,
+    appVersion,
+    fromPlayerAppF1,
+    fromPlayerAppF2,
     onAuth: handleAuth,
     onPaymentSuccess: handlePaymentSuccess,
     onNavigate: setCurrentPage
@@ -286,6 +449,8 @@ function App() {
       return <FortunePage message={fortuneMessage} {...pageProps} />
     case 'dashboard':
       return <DashboardPage {...pageProps} />
+    case 'analytics':
+      return <AnalyticsPage {...pageProps} />
     default:
       return <AuthPage {...pageProps} />
   }
