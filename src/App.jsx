@@ -89,7 +89,7 @@ function App() {
     if (fromHash) {
       setServerBase(fromHash)
     } else {
-      setServerBase('https://relieved-sparrow-fairly.ngrok-free.app')
+      setServerBase('https://bmi-server-eight.vercel.app')
     }
   }, [])
 
