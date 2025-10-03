@@ -342,6 +342,16 @@ function App() {
       setTimeout(() => {
         setCurrentPage('progress');
         startProgressAnimation();
+        
+        // Notify server to emit progress-start to Android
+        fetch(`${serverBase}/api/progress-start`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({ bmiId })
+        }).catch(e => console.error('Progress start notification error:', e));
       }, 5000);
     }, 5000);
   }
@@ -367,6 +377,16 @@ function App() {
         console.log('[FORTUNE] Using fortune from database:', data.fortune);
         setFortuneMessage(data.fortune);
         setCurrentPage('fortune');
+        
+        // Notify server to emit fortune-ready to Android
+        fetch(`${serverBase}/api/fortune-generate`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({ bmiId, appVersion })
+        }).catch(e => console.error('Fortune notification error:', e));
         
         setTimeout(() => {
           setCurrentPage('dashboard');
@@ -446,7 +466,7 @@ function App() {
     case 'progress':
       return <ProgressPage {...pageProps} />
     case 'fortune':
-      return <FortunePage message={fortuneMessage} {...pageProps} />
+      return <FortunePage message={fortuneMessage} onNavigate={setCurrentPage} {...pageProps} />
     case 'dashboard':
       return <DashboardPage {...pageProps} />
     case 'analytics':

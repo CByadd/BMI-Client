@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import QRCode from 'qrcode'
 
-function FortunePage({ message, data }) {
+function FortunePage({ message, data, onNavigate }) {
   const containerRef = useRef(null)
   const cookieRef = useRef(null)
   const messageRef = useRef(null)
@@ -16,6 +16,17 @@ function FortunePage({ message, data }) {
         .catch(err => console.error('QR Code generation failed:', err))
     }
   }, [data])
+
+  // Auto-redirect to dashboard after 10 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (onNavigate) {
+        onNavigate('dashboard')
+      }
+    }, 10000)
+
+    return () => clearTimeout(timer)
+  }, [onNavigate])
 
   useEffect(() => {
     if (containerRef.current && cookieRef.current && messageRef.current) {
