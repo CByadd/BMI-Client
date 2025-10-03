@@ -48,7 +48,7 @@ function AnalyticsDashboard({ userId }) {
     try {
       setLoading(true)
       const hashParams = window.location.hash.split('server=')[1]
-      const apiBase = hashParams ? decodeURIComponent(hashParams) : 'http://localhost:4000'
+      const apiBase = 'https://relieved-sparrow-fairly.ngrok-free.app'
       console.log('[ANALYTICS] Fetching from:', `${apiBase}/api/user/${userId}/analytics`)
       console.log('[ANALYTICS] Hash:', window.location.hash)
       const response = await fetch(`${apiBase}/api/user/${userId}/analytics`)
