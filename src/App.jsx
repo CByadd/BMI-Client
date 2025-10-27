@@ -89,7 +89,7 @@ function App() {
     if (fromHash) {
       setServerBase(fromHash)
     } else {
-      setServerBase('https://bmi-server-eight.vercel.app')
+      setServerBase('http://localhost:4000') // Default server base
     }
   }, [])
 
