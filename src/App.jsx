@@ -89,7 +89,7 @@ function App() {
     if (fromHash) {
       setServerBase(fromHash)
     } else {
-      setServerBase('http://localhost:4000') // Default server base
+      setServerBase('https://adscape-server-c4eedvgxgqcdepfe.centralindia-01.azurewebsites.net') // Default server base
     }
   }, [])
 
