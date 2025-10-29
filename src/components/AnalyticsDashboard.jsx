@@ -48,7 +48,7 @@ function AnalyticsDashboard({ userId }) {
     try {
       setLoading(true)
       const hashParams = window.location.hash.split('server=')[1]
-      const apiBase = 'https://relieved-sparrow-fairly.ngrok-free.app'
+      const apiBase = 'https://adscape-server-c4eedvgxgqcdepfe.centralindia-01.azurewebsites.net'
       console.log('[ANALYTICS] Fetching from:', `${apiBase}/api/user/${userId}/analytics`)
       console.log('[ANALYTICS] Hash:', window.location.hash)
       const response = await fetch(`${apiBase}/api/user/${userId}/analytics`)

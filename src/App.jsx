@@ -89,7 +89,7 @@ function App() {
     if (fromHash) {
       setServerBase(fromHash)
     } else {
-      setServerBase('https://relieved-sparrow-fairly.ngrok-free.app') // Default server base
+      setServerBase('https://adscape-server-c4eedvgxgqcdepfe.centralindia-01.azurewebsites.net') // Default server base
     }
   }, [])
 
