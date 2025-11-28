@@ -17,15 +17,44 @@ function FortunePage({ message, data, onNavigate }) {
     }
   }, [data])
 
-  // Auto-redirect to dashboard after 10 seconds
+  // For F2 flow: Check if user needs to login (if no cache, show login)
+  // For F1 flow: Auto-redirect to dashboard after 10 seconds
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (onNavigate) {
-        onNavigate('dashboard')
+    const params = new URLSearchParams(window.location.search)
+    const appVersion = params.get('appVersion') || ''
+    const fromPlayerAppF2 = appVersion === 'f2'
+    
+    if (fromPlayerAppF2) {
+      // F2: Check user cache - if exists, go to BMI calculation, else stay on fortune/login
+      const savedUser = localStorage.getItem('bmi_user')
+      if (savedUser) {
+        try {
+          const userData = JSON.parse(savedUser)
+          if (userData.userId) {
+            // User cache exists: Go to BMI calculation then dashboard
+            const timer = setTimeout(() => {
+              console.log('[FORTUNE] F2: User cache exists, going to BMI calculation');
+              if (onNavigate) {
+                onNavigate('bmi-result')
+              }
+            }, 3000)
+            return () => clearTimeout(timer)
+          }
+        } catch (e) {
+          console.error('[FORTUNE] Error parsing saved user:', e)
+        }
       }
-    }, 10000)
-
-    return () => clearTimeout(timer)
+      // No cache or error: Stay on fortune/login QR screen (user scans QR to login)
+      console.log('[FORTUNE] F2: No user cache, staying on Fortune/Login QR screen')
+    } else {
+      // F1: Auto-redirect to dashboard after 10 seconds
+      const timer = setTimeout(() => {
+        if (onNavigate) {
+          onNavigate('dashboard')
+        }
+      }, 10000)
+      return () => clearTimeout(timer)
+    }
   }, [onNavigate])
 
   useEffect(() => {
@@ -96,11 +125,17 @@ function FortunePage({ message, data, onNavigate }) {
 
         </div>
 
-        {/* QR Code Section */}
+        {/* QR Code Section - Show for F2 flow (Login QR) or if webUrl exists */}
         {qrCodeUrl && (
           <div className="card border-2 border-primary-200 bg-white mb-8">
             <div className="p-6 text-center">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Scan to continue on mobile</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                {(() => {
+                  const params = new URLSearchParams(window.location.search)
+                  const appVersion = params.get('appVersion') || ''
+                  return appVersion === 'f2' ? 'Login To Track Your Progress' : 'Scan to continue on mobile'
+                })()}
+              </h3>
               <div className="flex justify-center">
                 <img 
                   src={qrCodeUrl} 
@@ -109,7 +144,11 @@ function FortunePage({ message, data, onNavigate }) {
                 />
               </div>
               <p className="text-sm text-gray-600 mt-3">
-                Use your mobile device to scan this QR code
+                {(() => {
+                  const params = new URLSearchParams(window.location.search)
+                  const appVersion = params.get('appVersion') || ''
+                  return appVersion === 'f2' ? 'Scan with your mobile device to login' : 'Use your mobile device to scan this QR code'
+                })()}
               </p>
             </div>
           </div>

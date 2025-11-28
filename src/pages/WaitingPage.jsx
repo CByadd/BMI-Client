@@ -32,14 +32,22 @@ function WaitingPage({ onNavigate, data, appVersion }) {
       })
     }
     
-    // Auto-progress for F2 flow
+    // Auto-progress for F2 flow: Waiting (5 sec) → BMI Result → Fortune/Login QR
     if (appVersion === 'f2') {
-      const timer = setTimeout(() => {
-        console.log('[WAITING] F2 flow - auto-progressing to BMI result');
+      const timer1 = setTimeout(() => {
+        console.log('[WAITING] F2 flow - auto-progressing to BMI result (5 sec)');
         onNavigate('bmi-result');
-      }, 3000); // 3 seconds for F2
+        
+        // After BMI result, show Fortune/Login QR after 5 seconds
+        const timer2 = setTimeout(() => {
+          console.log('[WAITING] F2 flow - auto-progressing to Fortune/Login QR');
+          onNavigate('fortune'); // Fortune page will show QR for login
+        }, 5000);
+        
+        return () => clearTimeout(timer2);
+      }, 5000); // 5 seconds for F2 waiting screen
       
-      return () => clearTimeout(timer);
+      return () => clearTimeout(timer1);
     }
   }, [appVersion, onNavigate])
 

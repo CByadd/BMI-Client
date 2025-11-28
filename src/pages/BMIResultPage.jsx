@@ -59,11 +59,12 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
       )
     }
     
-    // Auto-progress for F2 flow
+    // F2 flow: After showing BMI result for 5 seconds, go to Fortune/Login QR
+    // F1 flow: Stay on BMI result (will be handled by parent component)
     if (appVersion === 'f2') {
       const timer = setTimeout(() => {
-        console.log('[BMI-RESULT] F2 flow - auto-progressing to dashboard');
-        onNavigate('dashboard');
+        console.log('[BMI-RESULT] F2 flow - auto-progressing to Fortune/Login QR');
+        onNavigate('fortune'); // Go to fortune page which shows login QR for F2
       }, 5000); // 5 seconds to view BMI result
       
       return () => clearTimeout(timer);

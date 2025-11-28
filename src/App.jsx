@@ -206,20 +206,34 @@ function App() {
           }
         }
         
-        // Handle different PlayerApp versions
+        // Handle different PlayerApp versions according to flowcharts
         if (fromPlayerAppF2) {
-          console.log(`[CLIENT] Coming from PlayerApp BMI F2, auto-progressing through flow`)
-          setCurrentPage('bmi-result')
-          
-          // F2: Auto-progress through the flow
-          setTimeout(() => {
-            setCurrentPage('progress')
-            startProgressAnimation()
-          }, 5000)
+          console.log(`[CLIENT] Coming from PlayerApp BMI F2`)
+          // F2 Flow: Waiting (5 sec) → BMI Result → Fortune/Login QR
+          setCurrentPage('waiting')
         } else if (fromPlayerAppF1) {
-          console.log(`[CLIENT] Coming from PlayerApp BMI F1, showing login/payment flow`)
-          // F1: Show login/payment flow first, then synchronized flow after payment
-          setCurrentPage('auth')
+          console.log(`[CLIENT] Coming from PlayerApp BMI F1`)
+          // F1 Flow: Check user cache
+          // If user cache exists: Payment → Waiting → BMI Result → Fortune → Adscape
+          // If user cache NOT exists: Auth → Payment → Waiting → BMI Result → Fortune → Dashboard
+          const savedUser = localStorage.getItem('bmi_user')
+          if (savedUser) {
+            try {
+              const userData = JSON.parse(savedUser)
+              if (userData.userId) {
+                console.log(`[CLIENT] F1: User cache exists, going to payment`)
+                setUser(userData)
+                setCurrentPage('payment') // Has cache: skip auth, go to payment
+              } else {
+                setCurrentPage('auth') // No valid cache: show login
+              }
+            } catch (e) {
+              setCurrentPage('auth') // Error parsing: show login
+            }
+          } else {
+            console.log(`[CLIENT] F1: No user cache, showing login`)
+            setCurrentPage('auth') // No cache: show login
+          }
         } else {
           // Regular web users: show login/payment flow
           setCurrentPage('auth')
@@ -284,11 +298,11 @@ function App() {
         console.log('[AUTH] Direct visit - going to dashboard');
         setCurrentPage('dashboard');
       } else if (fromPlayerAppF2) {
-        // F2 flow: Auth -> Waiting -> BMI Result -> Dashboard
-        console.log('[AUTH] F2 flow - going to waiting');
-        setCurrentPage('waiting');
+        // F2 flow: After login → BMI Calculation → Dashboard
+        console.log('[AUTH] F2 flow - user logged in, going to BMI calculation');
+        setCurrentPage('bmi-result');
       } else {
-        // F1 flow: Auth -> Payment -> Waiting -> BMI Result -> Fortune -> Dashboard
+        // F1 flow: After login → Payment → Waiting → BMI Result → Fortune → Dashboard
         console.log('[AUTH] F1 flow - going to payment');
         setCurrentPage('payment');
       }
@@ -328,6 +342,7 @@ function App() {
   }
 
   const handlePaymentSuccess = async () => {
+    // F1 Flow: Payment → Waiting → BMI Result → Fortune → Dashboard/Adscape
     setCurrentPage('waiting');
     
     // For F1 flow, link user to BMI record after payment completion
@@ -373,6 +388,7 @@ function App() {
       console.error('Payment success notification error:', e);
     }
     
+    // After 5 seconds: Waiting → BMI Result
     setTimeout(() => {
       // Notify server that we're showing BMI result
       fetch(`${serverBase}/api/processing-start`, {
@@ -385,6 +401,8 @@ function App() {
       }).catch(e => console.error('BMI result notification error:', e));
       
       setCurrentPage('bmi-result');
+      
+      // After 5 seconds: BMI Result → Fortune
       setTimeout(() => {
         setCurrentPage('progress');
         startProgressAnimation();
@@ -434,9 +452,31 @@ function App() {
           body: JSON.stringify({ bmiId, appVersion })
         }).catch(e => console.error('Fortune notification error:', e));
         
-        setTimeout(() => {
-          setCurrentPage('dashboard');
-        }, 10000);
+        // For F1: Go to dashboard after fortune
+        // For F2: Fortune page will handle login QR logic
+        if (!fromPlayerAppF2) {
+          setTimeout(() => {
+            // F1: Check if user cache exists to determine destination
+            const savedUser = localStorage.getItem('bmi_user')
+            if (savedUser) {
+              try {
+                const userData = JSON.parse(savedUser)
+                if (userData.userId) {
+                  // F1 with cache: Go to dashboard (could loop back to Adscape in future)
+                  setCurrentPage('dashboard')
+                  return
+                }
+              } catch (e) {
+                console.error('[FORTUNE] Error parsing saved user:', e)
+              }
+            }
+            // F1 without cache or error: Go to dashboard
+            setCurrentPage('dashboard')
+          }, 10000);
+        } else {
+          // F2: Stay on fortune page (it will show login QR and handle flow)
+          setCurrentPage('fortune')
+        }
         return;
       }
       
@@ -456,9 +496,16 @@ function App() {
         setFortuneMessage(result.fortuneMessage);
         setCurrentPage('fortune');
         
-        setTimeout(() => {
-          setCurrentPage('dashboard');
-        }, 10000);
+        // For F1: Go to dashboard after fortune
+        // For F2: Fortune page will handle login QR logic
+        if (!fromPlayerAppF2) {
+          setTimeout(() => {
+            setCurrentPage('dashboard')
+          }, 10000);
+        } else {
+          // F2: Stay on fortune page (it will show login QR and handle flow)
+          setCurrentPage('fortune')
+        }
       }
     } catch (e) {
       console.error('Fortune generation error:', e);
