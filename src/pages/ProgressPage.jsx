@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { gsap } from 'gsap'
 
-function ProgressPage({ progressValue }) {
+function ProgressPage({ progressValue, onProgressStart }) {
   const containerRef = useRef(null)
   const progressBarRef = useRef(null)
   const percentageRef = useRef(null)
@@ -13,7 +13,12 @@ function ProgressPage({ progressValue }) {
         { opacity: 1, y: 0, duration: 0.8, ease: "power2.out" }
       )
     }
-  }, [])
+    
+    // Start progress animation when component mounts or when onProgressStart is called
+    if (onProgressStart) {
+      onProgressStart()
+    }
+  }, [onProgressStart])
 
   useEffect(() => {
     if (progressBarRef.current && percentageRef.current) {

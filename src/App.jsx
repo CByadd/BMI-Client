@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { gsap } from 'gsap'
+import { io } from 'socket.io-client'
 import AuthPage from './pages/AuthPage'
 import PaymentPage from './pages/PaymentPage'
 import WaitingPage from './pages/WaitingPage'
@@ -96,9 +97,106 @@ function App() {
     }
   }, [])
 
+  // Set up Socket.IO connection for F1 flow synchronization
+  useEffect(() => {
+    if (!fromPlayerAppF1 || !screenId || !serverBase) {
+      return
+    }
+    
+    // Don't reconnect if already connected
+    if (socketRef.current?.connected) {
+      console.log('[SOCKET] Already connected, skipping reconnection')
+      return
+    }
+    
+    console.log('[SOCKET] Setting up Socket.IO connection for F1 flow sync')
+    
+    // Get socket URL from serverBase - handle both /api and without /api
+    let socketUrl = serverBase
+    if (socketUrl.endsWith('/api')) {
+      socketUrl = socketUrl.replace('/api', '')
+    }
+    // Remove trailing slash
+    socketUrl = socketUrl.replace(/\/$/, '')
+    
+    console.log('[SOCKET] Connecting to:', socketUrl)
+    const socket = io(socketUrl, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
+    })
+    
+    socket.on('connect', () => {
+      console.log('[SOCKET] Connected to server')
+      // Join the screen room for receiving events (use 'player-join' as per server)
+      if (screenId) {
+        socket.emit('player-join', { screenId })
+        console.log('[SOCKET] Joined screen room:', screenId)
+      }
+    })
+    
+    socket.on('disconnect', () => {
+      console.log('[SOCKET] Disconnected from server')
+    })
+    
+    socket.on('processing-state', (payload) => {
+      console.log('[SOCKET] Processing state received:', payload)
+      const state = payload.processingState
+      
+      // Sync screen based on processing state (only sync if not already on that page)
+      if (state === 'waiting') {
+        console.log('[SOCKET] Syncing to waiting screen')
+        setCurrentPage('waiting')
+      } else if (state === 'bmi-result') {
+        console.log('[SOCKET] Syncing to BMI result screen')
+        setCurrentPage('bmi-result')
+      } else if (state === 'progress') {
+        console.log('[SOCKET] Syncing to progress screen')
+        setCurrentPage('progress')
+        // Progress animation will start when ProgressPage mounts
+      }
+    })
+    
+    socket.on('payment-success', (payload) => {
+      console.log('[SOCKET] Payment success received:', payload)
+      // Update data with payment info
+      if (payload.user) {
+        setData(prev => ({ ...prev, user: payload.user, userId: payload.userId }))
+      }
+      // Sync to waiting screen if not already there
+      if (currentPage !== 'waiting') {
+        setCurrentPage('waiting')
+      }
+    })
+    
+    socket.on('fortune-ready', (payload) => {
+      console.log('[SOCKET] Fortune ready received:', payload)
+      if (payload.fortune || payload.fortuneMessage) {
+        setFortuneMessage(payload.fortune || payload.fortuneMessage)
+        if (currentPage !== 'fortune') {
+          setCurrentPage('fortune')
+        }
+      }
+    })
+    
+    socketRef.current = socket
+    
+    return () => {
+      console.log('[SOCKET] Cleaning up Socket.IO connection')
+      if (socketRef.current) {
+        socketRef.current.disconnect()
+        socketRef.current = null
+      }
+    }
+  }, [fromPlayerAppF1, screenId, serverBase]) // Remove currentPage from dependencies to prevent reconnection loops
+
   useEffect(() => {
     async function run() {
-      if (currentPage === 'dashboard' || currentPage === 'analytics') return
+      // Don't reload if we're on dashboard/analytics or have already loaded
+      if (currentPage === 'dashboard' || currentPage === 'analytics' || hasLoadedBMIRef.current) {
+        return
+      }
       
       // Check if this is a QR code visit (has screenId and bmiId)
       const isQRCodeVisit = !!(screenId && bmiId)
@@ -238,6 +336,9 @@ function App() {
           // Regular web users: show login/payment flow
           setCurrentPage('auth')
         }
+        
+        // Mark as loaded to prevent re-fetching (only on successful load)
+        hasLoadedBMIRef.current = true
       } catch (e) {
         console.error('[CLIENT] Fetch error:', e)
         setError(e.message)
@@ -245,12 +346,21 @@ function App() {
           setError('Server returned invalid response. Please create a new BMI record.')
           setCurrentPage('auth')
         }
+        hasLoadedBMIRef.current = true // Mark as loaded even on error to prevent loops
       } finally {
         setLoading(false)
       }
     }
-    run()
-  }, [serverBase, bmiId, token]) // Include token in dependencies
+    // Only run if we haven't loaded yet and have required params
+    if (serverBase && bmiId && !hasLoadedBMIRef.current) {
+      run()
+    }
+  }, [serverBase, bmiId, token]) // Only depend on params that should trigger reload
+  
+  // Reset hasLoadedBMI when bmiId changes (new QR code scan)
+  useEffect(() => {
+    hasLoadedBMIRef.current = false
+  }, [bmiId])
 
   const handleAuth = async (userData) => {
     console.log('[AUTH] Starting authentication for:', userData);
@@ -470,9 +580,9 @@ function App() {
                 console.error('[FORTUNE] Error parsing saved user:', e)
               }
             }
-            // F1 without cache or error: Go to dashboard
+            // F1 without cache or error: Go to dashboard after 7 seconds
             setCurrentPage('dashboard')
-          }, 10000);
+          }, 7000); // 7 seconds for F1 fortune screen
         } else {
           // F2: Stay on fortune page (it will show login QR and handle flow)
           setCurrentPage('fortune')
@@ -496,12 +606,12 @@ function App() {
         setFortuneMessage(result.fortuneMessage);
         setCurrentPage('fortune');
         
-        // For F1: Go to dashboard after fortune
-        // For F2: Fortune page will handle login QR logic
-        if (!fromPlayerAppF2) {
-          setTimeout(() => {
-            setCurrentPage('dashboard')
-          }, 10000);
+      // For F1: Go to dashboard after 7 seconds
+      // For F2: Fortune page will handle login QR logic (15 seconds)
+      if (!fromPlayerAppF2) {
+        setTimeout(() => {
+          setCurrentPage('dashboard')
+        }, 7000); // 7 seconds for F1
         } else {
           // F2: Stay on fortune page (it will show login QR and handle flow)
           setCurrentPage('fortune')
@@ -557,7 +667,7 @@ function App() {
     case 'bmi-result':
       return <BMIResultPage {...pageProps} />
     case 'progress':
-      return <ProgressPage {...pageProps} />
+      return <ProgressPage {...pageProps} onProgressStart={startProgressAnimation} />
     case 'fortune':
       return <FortunePage message={fortuneMessage} onNavigate={setCurrentPage} {...pageProps} />
     case 'dashboard':

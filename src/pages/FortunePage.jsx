@@ -44,15 +44,23 @@ function FortunePage({ message, data, onNavigate }) {
           console.error('[FORTUNE] Error parsing saved user:', e)
         }
       }
-      // No cache or error: Stay on fortune/login QR screen (user scans QR to login)
-      console.log('[FORTUNE] F2: No user cache, staying on Fortune/Login QR screen')
-    } else {
-      // F1: Auto-redirect to dashboard after 10 seconds
+      // No cache or error: Stay on fortune/login QR screen for 15 seconds, then go to dashboard
+      console.log('[FORTUNE] F2: No user cache, staying on Fortune/Login QR screen for 15 seconds')
       const timer = setTimeout(() => {
+        console.log('[FORTUNE] F2: 15 seconds elapsed, navigating to dashboard')
         if (onNavigate) {
           onNavigate('dashboard')
         }
-      }, 10000)
+      }, 15000) // 15 seconds for F2
+      return () => clearTimeout(timer)
+    } else {
+      // F1: Auto-redirect to dashboard after 7 seconds
+      const timer = setTimeout(() => {
+        if (onNavigate) {
+          console.log('[FORTUNE] F1: 7 seconds elapsed, navigating to dashboard')
+          onNavigate('dashboard')
+        }
+      }, 7000) // 7 seconds for F1
       return () => clearTimeout(timer)
     }
   }, [onNavigate])
@@ -163,7 +171,14 @@ function FortunePage({ message, data, onNavigate }) {
           </div>
           
           <p className="text-sm text-gray-500">
-            Redirecting to your dashboard in 10 seconds...
+            {(() => {
+              const params = new URLSearchParams(window.location.search)
+              const appVersion = params.get('appVersion') || ''
+              const fromPlayerAppF2 = appVersion === 'f2'
+              return fromPlayerAppF2 
+                ? 'Staying on this screen for 15 seconds...' 
+                : 'Redirecting to your dashboard in 7 seconds...'
+            })()}
           </p>
           
           <div className="flex items-center justify-center space-x-1">
