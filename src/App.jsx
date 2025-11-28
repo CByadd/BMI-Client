@@ -31,6 +31,8 @@ function App() {
   const [currentPage, setCurrentPage] = useState('loading')
   const [progressValue, setProgressValue] = useState(0)
   const [fortuneMessage, setFortuneMessage] = useState('')
+  const socketRef = useRef(null)
+  const hasLoadedBMIRef = useRef(false) // Use ref to prevent re-renders
 
   // Check if we should show dashboard or analytics directly
   useEffect(() => {
