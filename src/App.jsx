@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { gsap } from 'gsap'
 import { io } from 'socket.io-client'
 import AuthPage from './pages/AuthPage'
@@ -99,99 +99,68 @@ function App() {
     }
   }, [])
 
-  // Set up Socket.IO connection for F1 flow synchronization
+  // NEW: Connect socket when progress screen is shown (F1 flow only)
   useEffect(() => {
-    if (!fromPlayerAppF1 || !screenId || !serverBase) {
-      return
-    }
-    
-    // Don't reconnect if already connected
-    if (socketRef.current?.connected) {
-      console.log('[SOCKET] Already connected, skipping reconnection')
-      return
-    }
-    
-    console.log('[SOCKET] Setting up Socket.IO connection for F1 flow sync')
-    
-    // Get socket URL from serverBase - handle both /api and without /api
-    let socketUrl = serverBase
-    if (socketUrl.endsWith('/api')) {
-      socketUrl = socketUrl.replace('/api', '')
-    }
-    // Remove trailing slash
-    socketUrl = socketUrl.replace(/\/$/, '')
-    
-    console.log('[SOCKET] Connecting to:', socketUrl)
-    const socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    })
-    
-    socket.on('connect', () => {
-      console.log('[SOCKET] Connected to server')
-      // Join the screen room for receiving events (use 'player-join' as per server)
-      if (screenId) {
-        socket.emit('player-join', { screenId })
-        console.log('[SOCKET] Joined screen room:', screenId)
+    if (currentPage === 'progress' && fromPlayerAppF1 && screenId && serverBase) {
+      // Don't reconnect if already connected
+      if (socketRef.current?.connected) {
+        console.log('[SOCKET] Already connected, skipping reconnection')
+        return
       }
-    })
-    
-    socket.on('disconnect', () => {
-      console.log('[SOCKET] Disconnected from server')
-    })
-    
-    socket.on('processing-state', (payload) => {
-      console.log('[SOCKET] Processing state received:', payload)
-      const state = payload.processingState
       
-      // Sync screen based on processing state (only sync if not already on that page)
-      if (state === 'waiting') {
-        console.log('[SOCKET] Syncing to waiting screen')
-        setCurrentPage('waiting')
-      } else if (state === 'bmi-result') {
-        console.log('[SOCKET] Syncing to BMI result screen')
-        setCurrentPage('bmi-result')
-      } else if (state === 'progress') {
-        console.log('[SOCKET] Syncing to progress screen')
-        setCurrentPage('progress')
-        // Progress animation will start when ProgressPage mounts
+      console.log('[SOCKET] F1 Flow: Progress screen shown - connecting socket for Android sync')
+      
+      // Get socket URL from serverBase - handle both /api and without /api
+      let socketUrl = serverBase
+      if (socketUrl.endsWith('/api')) {
+        socketUrl = socketUrl.replace('/api', '')
       }
-    })
-    
-    socket.on('payment-success', (payload) => {
-      console.log('[SOCKET] Payment success received:', payload)
-      // Update data with payment info
-      if (payload.user) {
-        setData(prev => ({ ...prev, user: payload.user, userId: payload.userId }))
-      }
-      // Sync to waiting screen if not already there
-      if (currentPage !== 'waiting') {
-        setCurrentPage('waiting')
-      }
-    })
-    
-    socket.on('fortune-ready', (payload) => {
-      console.log('[SOCKET] Fortune ready received:', payload)
-      if (payload.fortune || payload.fortuneMessage) {
-        setFortuneMessage(payload.fortune || payload.fortuneMessage)
-        if (currentPage !== 'fortune') {
-          setCurrentPage('fortune')
+      // Remove trailing slash
+      socketUrl = socketUrl.replace(/\/$/, '')
+      
+      console.log('[SOCKET] Connecting to:', socketUrl)
+      const socket = io(socketUrl, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+      })
+      
+      socket.on('connect', () => {
+        console.log('[SOCKET] F1: Connected to server - Android can now sync')
+        // Join the screen room for receiving events
+        if (screenId) {
+          socket.emit('player-join', { screenId })
+          console.log('[SOCKET] Joined screen room:', screenId)
         }
-      }
-    })
-    
-    socketRef.current = socket
-    
-    return () => {
-      console.log('[SOCKET] Cleaning up Socket.IO connection')
-      if (socketRef.current) {
-        socketRef.current.disconnect()
-        socketRef.current = null
+      })
+      
+      socket.on('disconnect', () => {
+        console.log('[SOCKET] Disconnected from server')
+      })
+      
+      socket.on('processing-state', (payload) => {
+        console.log('[SOCKET] Processing state received:', payload)
+        const state = payload.processingState
+        
+        if (state === 'bmi-fortune') {
+          console.log('[SOCKET] F1: bmi-fortune state - showing BMI + Fortune simultaneously')
+          setCurrentPage('bmi-result')
+          // Generate and show fortune immediately
+          setTimeout(() => {
+            generateFortune()
+          }, 500)
+        }
+      })
+      
+      socketRef.current = socket
+      
+      return () => {
+        // Don't disconnect on unmount, keep connection alive
+        console.log('[SOCKET] Progress screen cleanup (keeping connection alive)')
       }
     }
-  }, [fromPlayerAppF1, screenId, serverBase]) // Remove currentPage from dependencies to prevent reconnection loops
+  }, [currentPage, fromPlayerAppF1, screenId, serverBase])
 
   useEffect(() => {
     async function run() {
@@ -454,8 +423,7 @@ function App() {
   }
 
   const handlePaymentSuccess = async () => {
-    // F1 Flow: Payment → Waiting → BMI Result → Fortune → Dashboard/Adscape
-    setCurrentPage('waiting');
+    // F1 Flow (NEW): Payment → Progress (socket connection) → BMI + Fortune simultaneously
     
     // For F1 flow, link user to BMI record after payment completion
     if (fromPlayerAppF1 && bmiId && user?.userId) {
@@ -477,7 +445,7 @@ function App() {
     }
     
     try {
-      // Notify server about payment success and that we're entering processing state
+      // Notify server about payment success
       await fetch(`${serverBase}/api/payment-success`, {
         method: 'POST',
         headers: { 
@@ -486,50 +454,46 @@ function App() {
         },
         body: JSON.stringify({ userId: user?.userId, bmiId, appVersion })
       });
-      
-      // Immediately notify server that we're in processing/waiting state (sync with Android)
-      await fetch(`${serverBase}/api/processing-start`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({ bmiId, appVersion, state: 'waiting' })
-      });
     } catch (e) {
       console.error('Payment success notification error:', e);
     }
     
-    // After 5 seconds: Waiting → BMI Result
+    // NEW F1 FLOW: Go directly to progress screen (this triggers socket connection on Android)
+    console.log('[PAYMENT] F1 Flow: Navigating to progress screen - Android will connect via socket')
+    
+    // Notify server that we're entering progress state (Android will connect via socket)
+    fetch(`${serverBase}/api/processing-start`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
+      },
+      body: JSON.stringify({ bmiId, appVersion, state: 'progress' })
+    }).catch(e => console.error('Progress state notification error:', e));
+    
+    setCurrentPage('progress');
+    // Start progress animation
+    startProgressAnimation();
+    
+    // After progress completes (5 seconds), notify server to show BMI + Fortune simultaneously
     setTimeout(() => {
-      // Notify server that we're showing BMI result
+      console.log('[PAYMENT] F1 Flow: Progress completed, emitting sync event for BMI + Fortune');
+      // Notify server that we're ready to show BMI + Fortune (sync with Android)
       fetch(`${serverBase}/api/processing-start`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true'
         },
-        body: JSON.stringify({ bmiId, appVersion, state: 'bmi-result' })
-      }).catch(e => console.error('BMI result notification error:', e));
+        body: JSON.stringify({ bmiId, appVersion, state: 'bmi-fortune' }) // New state for simultaneous display
+      }).catch(e => console.error('BMI+Fortune sync notification error:', e));
       
+      // Show BMI + Fortune simultaneously (they'll both be visible)
       setCurrentPage('bmi-result');
       
-      // After 5 seconds: BMI Result → Fortune
-      setTimeout(() => {
-        setCurrentPage('progress');
-        startProgressAnimation();
-        
-        // Notify server to emit progress-start to Android
-        fetch(`${serverBase}/api/progress-start`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
-          },
-          body: JSON.stringify({ bmiId })
-        }).catch(e => console.error('Progress start notification error:', e));
-      }, 5000);
-    }, 5000);
+      // Generate and show fortune immediately (they appear together)
+      generateFortune(); // This will show fortune screen
+    }, 5000); // 5 seconds for progress animation
   }
 
   const startProgressAnimation = () => {
