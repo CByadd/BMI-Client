@@ -92,7 +92,7 @@ function App() {
     } else {
       // Updated to point to Server instead of Adscape-Server
       // TODO: Update this URL to your server deployment URL
-      setServerBase('https://adscape-server-c4eedvgxgqcdepfe.centralindia-01.azurewebsites.net') // Change to your server URL
+      setServerBase(' https://relieved-sparrow-fairly.ngrok-free.app/api') // Change to your server URL
     }
   }, [])
 
