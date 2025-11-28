@@ -47,7 +47,9 @@ function App() {
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
     const fromHash = hash.get('server')
     if (fromHash) {
-      store.setServerBase(fromHash)
+      // Ensure it includes /api
+      const baseUrl = fromHash.endsWith('/api') ? fromHash : `${fromHash}/api`
+      store.setServerBase(baseUrl)
     }
   }, [])
 
@@ -149,7 +151,9 @@ function App() {
       store.setError(null)
       
       try {
-        const url = `${serverBase}/bmi/${bmiId}${appVersion ? `?appVersion=${appVersion}` : ''}`
+        // serverBase should already include /api, but ensure it does
+        const baseUrl = serverBase.endsWith('/api') ? serverBase : `${serverBase}/api`
+        const url = `${baseUrl}/bmi/${bmiId}${appVersion ? `?appVersion=${appVersion}` : ''}${token ? (appVersion ? '&' : '?') + `token=${token}` : ''}`
         console.log(`[CLIENT] Fetching BMI data from: ${url}`)
         
         const response = await fetch(url, {

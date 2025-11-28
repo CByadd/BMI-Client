@@ -107,7 +107,9 @@ export const useAppStore = create(
         get().setParams({ screenId, bmiId, appVersion, token })
         
         if (serverBase) {
-          get().setServerBase(serverBase)
+          // Ensure it includes /api
+          const baseUrl = serverBase.endsWith('/api') ? serverBase : `${serverBase}/api`
+          get().setServerBase(baseUrl)
         } else {
           // Default server base
           get().setServerBase('https://relieved-sparrow-fairly.ngrok-free.app/api')
