@@ -18,6 +18,7 @@ function App() {
   const screenId = params.get('screenId') || ''
   const bmiId = params.get('bmiId') || ''
   const appVersion = params.get('appVersion') || '' // Detect specific app version
+  const token = params.get('token') || '' // Token for QR code URL expiration
   const fromPlayerAppF2 = appVersion === 'f2' // Detect if coming from PlayerApp BMI F2
   const fromPlayerAppF1 = appVersion === 'f1' // Detect if coming from PlayerApp BMI F1
   const fromPlayerApp = fromPlayerAppF1 || fromPlayerAppF2 // Detect if coming from any PlayerApp version
@@ -89,7 +90,9 @@ function App() {
     if (fromHash) {
       setServerBase(fromHash)
     } else {
-      setServerBase('https://adscape-server-c4eedvgxgqcdepfe.centralindia-01.azurewebsites.net') // Default server base
+      // Updated to point to Server instead of Adscape-Server
+      // TODO: Update this URL to your server deployment URL
+      setServerBase('https://adscape-server-c4eedvgxgqcdepfe.centralindia-01.azurewebsites.net') // Change to your server URL
     }
   }, [])
 
@@ -116,7 +119,12 @@ function App() {
       setLoading(true)
       setError('')
       try {
-        const url = `${serverBase}/api/bmi/${encodeURIComponent(bmiId)}`
+        // Include token in URL if available (for QR code access)
+        let url = `${serverBase}/api/bmi/${encodeURIComponent(bmiId)}`
+        if (token) {
+          url += `?token=${encodeURIComponent(token)}`
+          console.log(`[CLIENT] Using token for BMI access`)
+        }
         console.log(`[CLIENT] Fetching BMI from: ${url}`)
         
         const res = await fetch(url, {
@@ -137,6 +145,23 @@ function App() {
           console.error(`[CLIENT] Error response:`, responseText)
           if (res.status === 404) {
             setError('BMI record not found. Please create a new BMI record.')
+            setCurrentPage('auth')
+            return
+          }
+          if (res.status === 401) {
+            // Token expired or invalid
+            try {
+              const errorData = JSON.parse(responseText)
+              setError(errorData.message || 'This QR code has expired or has already been used. Please scan a new QR code.')
+            } catch {
+              setError('This QR code has expired or has already been used. Please scan a new QR code.')
+            }
+            setCurrentPage('auth')
+            return
+          }
+          if (res.status === 403) {
+            // Token mismatch
+            setError('Invalid QR code. Please scan a new QR code.')
             setCurrentPage('auth')
             return
           }
@@ -211,7 +236,7 @@ function App() {
       }
     }
     run()
-  }, [serverBase, bmiId]) // Removed user and currentPage from dependencies
+  }, [serverBase, bmiId, token]) // Include token in dependencies
 
   const handleAuth = async (userData) => {
     console.log('[AUTH] Starting authentication for:', userData);
