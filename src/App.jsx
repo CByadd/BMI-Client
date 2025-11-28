@@ -350,6 +350,7 @@ function App() {
     }
     
     try {
+      // Notify server about payment success and that we're entering processing state
       await fetch(`${serverBase}/api/payment-success`, {
         method: 'POST',
         headers: { 
@@ -358,11 +359,31 @@ function App() {
         },
         body: JSON.stringify({ userId: user?.userId, bmiId, appVersion })
       });
+      
+      // Immediately notify server that we're in processing/waiting state (sync with Android)
+      await fetch(`${serverBase}/api/processing-start`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({ bmiId, appVersion, state: 'waiting' })
+      });
     } catch (e) {
       console.error('Payment success notification error:', e);
     }
     
     setTimeout(() => {
+      // Notify server that we're showing BMI result
+      fetch(`${serverBase}/api/processing-start`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({ bmiId, appVersion, state: 'bmi-result' })
+      }).catch(e => console.error('BMI result notification error:', e));
+      
       setCurrentPage('bmi-result');
       setTimeout(() => {
         setCurrentPage('progress');
