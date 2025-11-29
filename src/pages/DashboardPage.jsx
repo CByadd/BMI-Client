@@ -106,12 +106,6 @@ function DashboardPage({ user, data, serverBase }) {
             </div>
             <h3 className="text-xl font-bold text-gray-900 mb-2">Login Required</h3>
             <p className="text-gray-600 mb-6">Please complete the BMI measurement process to access your analytics dashboard.</p>
-            <button 
-              onClick={handleStartNewBMI}
-              className="btn-primary"
-            >
-              Start BMI Check
-            </button>
           </div>
         )}
       </div>

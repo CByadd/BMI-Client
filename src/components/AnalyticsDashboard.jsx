@@ -12,6 +12,7 @@ import {
   ArcElement,
 } from 'chart.js'
 import { Line, Doughnut } from 'react-chartjs-2'
+import { useAppStore } from '../stores/useAppStore'
 
 ChartJS.register(
   CategoryScale,
@@ -25,6 +26,7 @@ ChartJS.register(
 )
 
 function AnalyticsDashboard({ userId }) {
+  const { serverBase } = useAppStore()
   const [analytics, setAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -36,7 +38,7 @@ function AnalyticsDashboard({ userId }) {
 
   useEffect(() => {
     fetchAnalytics()
-  }, [userId])
+  }, [userId, serverBase])
 
   useEffect(() => {
     if (analytics && dashboardRef.current) {
@@ -47,11 +49,13 @@ function AnalyticsDashboard({ userId }) {
   const fetchAnalytics = async () => {
     try {
       setLoading(true)
-      const hashParams = window.location.hash.split('server=')[1]
-      const apiBase = 'https://adscape-server-c4eedvgxgqcdepfe.centralindia-01.azurewebsites.net'
-      console.log('[ANALYTICS] Fetching from:', `${apiBase}/api/user/${userId}/analytics`)
+      // Use serverBase from store, default to ngrok URL if not set
+      const apiBase = serverBase || 'https://relieved-sparrow-fairly.ngrok-free.app/api'
+      console.log('[ANALYTICS] Fetching from:', `${apiBase}/user/${userId}/analytics`)
       console.log('[ANALYTICS] Hash:', window.location.hash)
-      const response = await fetch(`${apiBase}/api/user/${userId}/analytics`)
+      const response = await fetch(`${apiBase}/user/${userId}/analytics`, {
+        headers: { 'ngrok-skip-browser-warning': 'true' }
+      })
       
       if (!response.ok) {
         const errorText = await response.text()

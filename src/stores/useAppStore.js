@@ -14,8 +14,8 @@ export const useAppStore = create(
       appVersion: '',
       token: '',
       
-      // Server Configuration
-      serverBase: '',
+      // Server Configuration - Default to ngrok URL
+      serverBase: 'https://relieved-sparrow-fairly.ngrok-free.app/api',
       
       // Application State
       loading: true,
