@@ -23,6 +23,7 @@ function App() {
     screenId,
     bmiId,
     appVersion,
+    token,
     serverBase,
     loading,
     error,
@@ -66,45 +67,65 @@ function App() {
       return
     }
     
-    // Check if user is visiting directly (not via QR code) and has saved login
-    const isDirectVisit = !bmiId && !screenId
-    if (isDirectVisit && user?.userId) {
-      console.log('[CLIENT] Direct visit with saved user, showing dashboard')
+    // IMPORTANT: Never redirect to dashboard if URL has QR code parameters
+    // Check URL directly to avoid race conditions with store state
+    const urlParams = new URLSearchParams(window.location.search)
+    const urlBmiId = urlParams.get('bmiId')
+    const urlScreenId = urlParams.get('screenId')
+    const urlAppVersion = urlParams.get('appVersion')
+    const hasQRParams = !!(urlBmiId && urlScreenId) || !!urlAppVersion
+    
+    // Only redirect to dashboard if:
+    // 1. NO QR code parameters in URL
+    // 2. User exists in storage
+    // 3. Current page is still 'loading' (hasn't been set by other logic)
+    if (!hasQRParams && user?.userId && currentPage === 'loading' && !loading) {
+      console.log('[CLIENT] Direct visit with saved user, showing dashboard (no QR params detected)')
       store.setCurrentPage('dashboard')
       store.setLoading(false)
     }
-  }, [bmiId, screenId, user?.userId])
+  }, [bmiId, screenId, appVersion, user?.userId, currentPage, loading])
 
-  // Socket connection for F1 flow
+  // Socket connection for F1 flow - connect early to receive sync events
   useEffect(() => {
-    if (!fromPlayerAppF1 || !screenId || !serverBase || currentPage !== 'progress') {
+    // Only connect for F1 flow when we have QR code parameters
+    if (!fromPlayerAppF1 || !screenId || !serverBase || !bmiId) {
       return
     }
 
-    if (socketStore.socket?.connected) {
-      console.log('[SOCKET] Already connected, skipping reconnection')
+    // Connect when on payment page or progress page (for F1 flow sync)
+    const shouldConnect = currentPage === 'payment' || currentPage === 'progress'
+    if (!shouldConnect) {
       return
     }
 
-    console.log('[SOCKET] Setting up Socket.IO connection for F1 flow sync')
-    const socket = socketStore.connect(serverBase, screenId)
+    // Connect socket if not already connected
+    if (!socketStore.socket?.connected) {
+      console.log('[SOCKET] Setting up Socket.IO connection for F1 flow sync')
+      socketStore.connect(serverBase, screenId)
+    }
 
-    // Listen for processing state changes
+    // Set up listeners regardless of connection state (will work once connected)
     const unsubscribe = socketStore.onProcessingState((payload) => {
       console.log('[SOCKET] Processing state received:', payload)
       const state = payload.processingState
 
       if (state === 'progress') {
-        console.log('[SOCKET] F1: Progress state - Android should connect now')
-        store.setCurrentPage('progress')
-        startProgressAnimation()
+        console.log('[SOCKET] F1: Progress state received - navigating to progress page')
+        if (currentPage !== 'progress') {
+          store.setCurrentPage('progress')
+        }
+        // Only start animation if not already running to prevent infinite loops
+        if (!store.isProgressRunning) {
+          startProgressAnimation()
+        }
       } else if (state === 'bmi-fortune') {
         console.log('[SOCKET] F1: bmi-fortune state - showing BMI + Fortune simultaneously')
         if (payload.fortune || payload.fortuneMessage) {
           const fortune = payload.fortune || payload.fortuneMessage
           store.setFortuneMessage(fortune)
-          if (data) {
-            store.setData({ ...data, fortune })
+          if (store.data) {
+            store.setData({ ...store.data, fortune })
           }
         } else if (!store.fortuneGenerated) {
           generateFortune()
@@ -120,10 +141,12 @@ function App() {
     })
 
     return () => {
-      unsubscribe()
-      console.log('[SOCKET] Progress screen cleanup')
+      if (unsubscribe) {
+        unsubscribe()
+      }
+      console.log('[SOCKET] F1 flow cleanup')
     }
-  }, [currentPage, fromPlayerAppF1, screenId, serverBase])
+  }, [currentPage, fromPlayerAppF1, screenId, serverBase, bmiId])
 
   // Load BMI data
   useEffect(() => {
@@ -161,6 +184,27 @@ function App() {
         })
         
         if (!response.ok) {
+          // Try to parse error response for token validation errors
+          const errorText = await response.text()
+          let errorData
+          try {
+            errorData = JSON.parse(errorText)
+          } catch (e) {
+            // Not JSON, use status text
+          }
+          
+          // Handle token validation errors
+          if (response.status === 401 || response.status === 403) {
+            const errorType = errorData?.error
+            if (errorType === 'token_invalid' || errorType === 'token_mismatch') {
+              console.error(`[CLIENT] Token validation failed: ${errorData?.message || 'Invalid or expired token'}`)
+              store.setError(`Token validation failed: ${errorData?.message || 'Invalid or expired token'}`)
+              store.setCurrentPage('auth')
+              store.setLoading(false)
+              return
+            }
+          }
+          
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
         
@@ -175,6 +219,15 @@ function App() {
         } catch (parseError) {
           console.error('[CLIENT] JSON parse error:', parseError)
           throw new Error('Invalid JSON response')
+        }
+        
+        // Check if response contains error field (from server)
+        if (bmiData?.error) {
+          console.error(`[CLIENT] Server returned error: ${bmiData.error} - ${bmiData.message}`)
+          store.setError(bmiData.message || bmiData.error)
+          store.setCurrentPage('auth')
+          store.setLoading(false)
+          return
         }
         
         console.log('[CLIENT] BMI data loaded:', bmiData)
@@ -235,7 +288,8 @@ function App() {
   const handleAuth = async (userData) => {
     console.log('[AUTH] Starting authentication for:', userData)
     try {
-      const res = await fetch(`${serverBase}/api/user`, {
+      const apiUrl = serverBase.endsWith('/api') ? serverBase : `${serverBase}/api`
+      const res = await fetch(`${apiUrl}/user`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -256,7 +310,8 @@ function App() {
       if (isQRCodeVisit && bmiId && userResponse.userId && fromPlayerAppF2) {
         try {
           console.log('[AUTH] F2 Flow: Linking user to BMI record immediately:', bmiId)
-          await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
+          const apiUrl = serverBase.endsWith('/api') ? serverBase : `${serverBase}/api`
+          await fetch(`${apiUrl}/bmi/${bmiId}/link-user`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
@@ -287,7 +342,8 @@ function App() {
       const isQRCodeVisit = !!(screenId && bmiId)
       if (isQRCodeVisit && bmiId && userData.userId && fromPlayerAppF2) {
         try {
-          await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
+          const apiUrl = serverBase.endsWith('/api') ? serverBase : `${serverBase}/api`
+          await fetch(`${apiUrl}/bmi/${bmiId}/link-user`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
@@ -311,22 +367,26 @@ function App() {
   }
 
   const startProgressAnimation = () => {
+    // Clear any existing interval first
+    if (startProgressAnimation.intervalRef) {
+      clearInterval(startProgressAnimation.intervalRef)
+      startProgressAnimation.intervalRef = null
+    }
+    
     store.setProgressValue(0)
     store.setProgressRunning(true)
     
-    if (startProgressAnimation.intervalRef) {
-      clearInterval(startProgressAnimation.intervalRef)
-    }
-    
+    let currentProgress = 0
     startProgressAnimation.intervalRef = setInterval(() => {
-      store.setProgressValue(prev => {
-        if (prev >= 100) {
-          clearInterval(startProgressAnimation.intervalRef)
-          store.setProgressRunning(false)
-          return 100
-        }
-        return prev + 1
-      })
+      currentProgress += 1
+      if (currentProgress >= 100) {
+        clearInterval(startProgressAnimation.intervalRef)
+        startProgressAnimation.intervalRef = null
+        store.setProgressRunning(false)
+        store.setProgressValue(100)
+      } else {
+        store.setProgressValue(currentProgress)
+      }
     }, 50)
   }
 
@@ -343,7 +403,8 @@ function App() {
         store.setFortuneMessage(data.fortune)
         store.setCurrentPage('fortune')
 
-        fetch(`${serverBase}/api/fortune-generate`, {
+        const apiUrl = serverBase.endsWith('/api') ? serverBase : `${serverBase}/api`
+        fetch(`${apiUrl}/fortune-generate`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -375,7 +436,8 @@ function App() {
       }
 
       console.log('[FORTUNE] No fortune in database, generating new one')
-      const response = await fetch(`${serverBase}/api/fortune-generate`, {
+      const apiUrl = serverBase.endsWith('/api') ? serverBase : `${serverBase}/api`
+      const response = await fetch(`${apiUrl}/fortune-generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -412,7 +474,8 @@ function App() {
     if (fromPlayerAppF1 && bmiId && user?.userId) {
       try {
         console.log('[PAYMENT] F1 Flow: Linking user to BMI record after payment:', bmiId)
-        await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
+        const apiUrl = serverBase.endsWith('/api') ? serverBase : `${serverBase}/api`
+        await fetch(`${apiUrl}/bmi/${bmiId}/link-user`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -427,7 +490,8 @@ function App() {
     }
 
     try {
-      await fetch(`${serverBase}/api/payment-success`, {
+      const apiUrl = serverBase.endsWith('/api') ? serverBase : `${serverBase}/api`
+      await fetch(`${apiUrl}/payment-success`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -445,7 +509,8 @@ function App() {
     startProgressAnimation()
 
     setTimeout(() => {
-      fetch(`${serverBase}/api/processing-start`, {
+      const apiUrl = serverBase.endsWith('/api') ? serverBase : `${serverBase}/api`
+      fetch(`${apiUrl}/processing-start`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -459,7 +524,8 @@ function App() {
       console.log('[PAYMENT] F1 Flow: Progress completed, emitting sync event for BMI + Fortune')
       generateFortune()
 
-      fetch(`${serverBase}/api/processing-start`, {
+      const apiUrl = serverBase.endsWith('/api') ? serverBase : `${serverBase}/api`
+      fetch(`${apiUrl}/processing-start`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -469,7 +535,7 @@ function App() {
           bmiId, 
           appVersion, 
           state: 'bmi-fortune',
-          fortune: data?.fortune || fortuneMessage
+          fortune: store.data?.fortune || store.fortuneMessage
         })
       }).catch(e => console.error('BMI+Fortune sync notification error:', e))
 
