@@ -21,20 +21,15 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
   }
 
   useEffect(() => {
-    let bmiAnimation = null
-    let containerAnimation = null
-    let cardsAnimation = null
-    let timer = null
-    
     if (containerRef.current && bmiValueRef.current && cardsRef.current) {
       // Container fade in
-      containerAnimation = gsap.fromTo(containerRef.current,
+      gsap.fromTo(containerRef.current,
         { opacity: 0, y: 50 },
         { opacity: 1, y: 0, duration: 0.8, ease: "power2.out" }
       )
       
       // BMI value counter animation
-      bmiAnimation = gsap.fromTo(bmiValueRef.current,
+      gsap.fromTo(bmiValueRef.current,
         { textContent: 0, scale: 0.5 },
         { 
           textContent: data?.bmi?.toFixed?.(1) ?? data?.bmi ?? 0,
@@ -44,22 +39,13 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
           ease: "back.out(1.7)",
           snap: { textContent: 0.1 },
           onUpdate: function() {
-            // Check if ref is still valid before updating
-            if (bmiValueRef.current) {
-              const target = this.targets()[0]
-              if (target && target.textContent !== undefined && target.textContent !== null) {
-                const numValue = parseFloat(target.textContent)
-                if (!isNaN(numValue)) {
-                  bmiValueRef.current.textContent = numValue.toFixed(1)
-                }
-              }
-            }
+            bmiValueRef.current.textContent = parseFloat(this.targets()[0].textContent).toFixed(1)
           }
         }
       )
       
       // Cards stagger animation
-      cardsAnimation = gsap.fromTo(cardsRef.current.children,
+      gsap.fromTo(cardsRef.current.children,
         { opacity: 0, y: 30, scale: 0.9 },
         { 
           opacity: 1, 
@@ -75,26 +61,12 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
     
     // Auto-progress for F2 flow
     if (appVersion === 'f2') {
-      timer = setTimeout(() => {
+      const timer = setTimeout(() => {
         console.log('[BMI-RESULT] F2 flow - auto-progressing to dashboard');
         onNavigate('dashboard');
       }, 5000); // 5 seconds to view BMI result
-    }
-    
-    // Cleanup function - runs on unmount or when dependencies change
-    return () => {
-      if (timer) {
-        clearTimeout(timer)
-      }
-      if (bmiAnimation) {
-        bmiAnimation.kill()
-      }
-      if (containerAnimation) {
-        containerAnimation.kill()
-      }
-      if (cardsAnimation) {
-        cardsAnimation.kill()
-      }
+      
+      return () => clearTimeout(timer);
     }
   }, [data, appVersion, onNavigate])
 
@@ -190,5 +162,4 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
     </div>
   )
 }
-
 export default BMIResultPage

@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { gsap } from 'gsap'
-import { io } from 'socket.io-client'
 import AuthPage from './pages/AuthPage'
 import PaymentPage from './pages/PaymentPage'
 import WaitingPage from './pages/WaitingPage'
-import AnalyzingPage from './pages/AnalyzingPage'
 import BMIResultPage from './pages/BMIResultPage'
 import ProgressPage from './pages/ProgressPage'
 import FortunePage from './pages/FortunePage'
@@ -20,12 +18,9 @@ function App() {
   const screenId = params.get('screenId') || ''
   const bmiId = params.get('bmiId') || ''
   const appVersion = params.get('appVersion') || '' // Detect specific app version
-  const token = params.get('token') || '' // Token for pairing
   const fromPlayerAppF2 = appVersion === 'f2' // Detect if coming from PlayerApp BMI F2
   const fromPlayerAppF1 = appVersion === 'f1' // Detect if coming from PlayerApp BMI F1
   const fromPlayerApp = fromPlayerAppF1 || fromPlayerAppF2 // Detect if coming from any PlayerApp version
-  const [tokenClaimed, setTokenClaimed] = useState(false)
-  const [tokenExpired, setTokenExpired] = useState(false)
   const [serverBase, setServerBase] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -34,52 +29,6 @@ function App() {
   const [currentPage, setCurrentPage] = useState('loading')
   const [progressValue, setProgressValue] = useState(0)
   const [fortuneMessage, setFortuneMessage] = useState('')
-  const progressIntervalRef = useRef(null)
-  const socketRef = useRef(null)
-  const [androidReady, setAndroidReady] = useState(false)
-  
-  // Helper function to wait for Android app to be ready
-  const waitForAndroidApp = async (maxWaitSeconds = 60) => {
-    if (!screenId || !serverBase) {
-      console.log('[CLIENT] [SYNC] No screenId or serverBase, skipping Android wait')
-      return true
-    }
-    
-    console.log(`[CLIENT] [SYNC] Waiting for Android app to be ready (max wait: ${maxWaitSeconds}s)...`)
-    const maxAttempts = Math.floor(maxWaitSeconds / 2) // Check every 2 seconds
-    
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        const response = await fetch(`${serverBase}/api/debug/connections`, {
-          headers: { 'ngrok-skip-browser-warning': 'true' }
-        })
-        const result = await response.json()
-        const roomName = `screen:${screenId}`
-        const room = result.rooms?.find(r => r.room === roomName)
-        const androidConnected = room && room.size > 0
-        
-        console.log(`[CLIENT] [SYNC] Attempt ${attempt + 1}/${maxAttempts}: Android status:`, {
-          roomName,
-          roomSize: room?.size || 0,
-          androidConnected
-        })
-        
-        if (androidConnected) {
-          console.log('[CLIENT] [SYNC] ✅ Android app is ready!')
-          setAndroidReady(true)
-          return true
-        }
-      } catch (e) {
-        console.error('[CLIENT] [SYNC] Error checking Android status:', e)
-      }
-      
-      // Wait 2 seconds before next check
-      await new Promise(resolve => setTimeout(resolve, 2000))
-    }
-    
-    console.log('[CLIENT] [SYNC] ⚠️ Android app not ready after waiting, proceeding anyway')
-    return false
-  }
 
   // Check if we should show dashboard or analytics directly
   useEffect(() => {
@@ -145,136 +94,6 @@ function App() {
       setServerBase('https://adscape-server-c4eedvgxgqcdepfe.centralindia-01.azurewebsites.net') // Change to your server URL
     }
   }, [])
-
-  // Connect to Socket.IO and wait for Android app (only for QR code visits)
-  useEffect(() => {
-    if (!screenId || !serverBase) return
-    
-    const isQRCodeVisit = !!(screenId && bmiId)
-    if (!isQRCodeVisit || !fromPlayerApp) return
-    
-    console.log('[CLIENT] [SOCKET] Connecting to server for Android sync:', serverBase)
-    const socketUrl = serverBase.replace('/api', '')
-    console.log('[CLIENT] [SOCKET] Socket URL:', socketUrl)
-    
-    const socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      timeout: 20000,
-      // Pass BMI session token (if any) in Socket.IO auth payload
-      auth: token ? { bmiToken: token } : {}
-    })
-    
-    socket.on('connect', () => {
-      console.log('[CLIENT] [SOCKET] ✅ Connected to server, socket ID:', socket.id)
-      // Join the same room as Android app
-      socket.emit('player-join', {
-        screenId: screenId,
-        machineId: screenId,
-        type: 'web'
-      })
-      console.log('[CLIENT] [SOCKET] Joined room for screenId:', screenId)
-    })
-    
-    socket.on('disconnect', (reason) => {
-      console.log('[CLIENT] [SOCKET] Disconnected from server, reason:', reason)
-      setAndroidReady(false)
-    })
-    
-    socket.on('connect_error', (error) => {
-      console.error('[CLIENT] [SOCKET] Connection error:', error)
-      setAndroidReady(false)
-    })
-    
-    // Listen for Android screen state changes
-    socket.on('android-screen-state', (data) => {
-      console.log('[CLIENT] [SOCKET] ✅ Android screen state changed:', data)
-      if (data.state === 'loading' || data.state === 'bmi') {
-        console.log('[CLIENT] [SOCKET] Android switched from QR to', data.state, '- client can proceed')
-        setAndroidReady(true)
-      }
-    })
-    
-    // Listen for Android payment confirmation (legacy, keeping for compatibility)
-    socket.on('android-payment-received', (data) => {
-      console.log('[CLIENT] [SOCKET] ✅ Android confirmed payment received:', data)
-      setAndroidReady(true)
-    })
-    
-    // NEW: listen for explicit android-ready event
-    socket.on('android-ready', (data) => {
-      console.log('[CLIENT] [SOCKET] ✅ Received android-ready event:', data)
-      setAndroidReady(true)
-    })
-    
-    socketRef.current = socket
-    
-    return () => {
-      if (socket) {
-        console.log('[CLIENT] [SOCKET] Disconnecting socket')
-        socket.disconnect()
-      }
-    }
-  }, [screenId, bmiId, serverBase, fromPlayerApp])
-
-  // Claim token when QR is scanned (for F1 flow)
-  useEffect(() => {
-    if (token && screenId && bmiId && fromPlayerAppF1 && serverBase) {
-      console.log('[CLIENT] [TOKEN] Claiming token:', token)
-      fetch(`${serverBase}/api/token/claim`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({ token })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.ok) {
-          console.log('[CLIENT] [TOKEN] ✅ Token claimed successfully:', data)
-          setTokenClaimed(true)
-          
-          // Start monitoring token status
-          const checkTokenStatus = async () => {
-            let attempts = 0
-            const maxAttempts = 30 // 30 seconds (30 * 1s)
-            
-            while (attempts < maxAttempts && !tokenExpired) {
-              try {
-                const statusRes = await fetch(`${serverBase}/api/token/${token}/status`, {
-                  headers: { 'ngrok-skip-browser-warning': 'true' }
-                })
-                const statusData = await statusRes.json()
-                
-                if (statusData.ok) {
-                  console.log('[CLIENT] [TOKEN] Token status:', statusData.token)
-                  if (statusData.token.isExpired || statusData.token.isUnusedTimeout) {
-                    console.log('[CLIENT] [TOKEN] ⚠️ Token expired or unused timeout')
-                    setTokenExpired(true)
-                    break
-                  }
-                }
-              } catch (e) {
-                console.error('[CLIENT] [TOKEN] Error checking status:', e)
-              }
-              
-              attempts++
-              await new Promise(resolve => setTimeout(resolve, 1000))
-            }
-          }
-          
-          checkTokenStatus()
-        } else {
-          console.log('[CLIENT] [TOKEN] ⚠️ Token claim failed:', data.error)
-          setTokenExpired(true)
-        }
-      })
-      .catch(e => {
-        console.error('[CLIENT] [TOKEN] Error claiming token:', e)
-      })
-    }
-  }, [token, screenId, bmiId, fromPlayerAppF1, serverBase])
 
   useEffect(() => {
     async function run() {
@@ -486,17 +305,12 @@ function App() {
   }
 
   const handlePaymentSuccess = async () => {
-    // For F1: show \"Analyzing\" screen, for F2: keep existing waiting screen
-    if (fromPlayerAppF1) {
-      setCurrentPage('analyzing')
-    } else {
-      setCurrentPage('waiting')
-    }
+    setCurrentPage('waiting');
     
     // For F1 flow, link user to BMI record after payment completion
     if (fromPlayerAppF1 && bmiId && user?.userId) {
       try {
-        console.log('[PAYMENT] F1 Flow: Linking user to BMI record after payment:', bmiId)
+        console.log('[PAYMENT] F1 Flow: Linking user to BMI record after payment:', bmiId);
         await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
           method: 'POST',
           headers: { 
@@ -504,10 +318,10 @@ function App() {
             'ngrok-skip-browser-warning': 'true'
           },
           body: JSON.stringify({ userId: user.userId })
-        })
-        console.log('[PAYMENT] F1 Flow: Successfully linked user to BMI record')
+        });
+        console.log('[PAYMENT] F1 Flow: Successfully linked user to BMI record');
       } catch (linkError) {
-        console.error('[PAYMENT] F1 Flow: Error linking user to BMI:', linkError)
+        console.error('[PAYMENT] F1 Flow: Error linking user to BMI:', linkError);
         // Continue with flow even if linking fails
       }
     }
@@ -519,53 +333,37 @@ function App() {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true'
         },
-        // Include token so server can move token state from qr_scanned -> payment_done
-        body: JSON.stringify({ userId: user?.userId, bmiId, appVersion, token })
-      })
+        body: JSON.stringify({ userId: user?.userId, bmiId, appVersion })
+      });
     } catch (e) {
-      console.error('Payment success notification error:', e)
+      console.error('Payment success notification error:', e);
     }
     
-    // For F2 flow, keep existing behavior (wait for Android and show progress)
-    if (!fromPlayerAppF1) {
-      console.log('[PAYMENT] [SYNC] Waiting for Android app to be ready...')
-      waitForAndroidApp(60).then(() => {
-        console.log('[PAYMENT] [SYNC] Proceeding with flow after Android sync')
-        // Proceed with flow
-        setCurrentPage('bmi-result')
-        setTimeout(() => {
-          setCurrentPage('progress')
-          startProgressAnimation()
-          
-          // Notify server to emit progress-start to Android
-          fetch(`${serverBase}/api/progress-start`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': 'true'
-            },
-            body: JSON.stringify({ bmiId })
-          }).catch(e => console.error('Progress start notification error:', e))
-        }, 5000)
-      })
-    }
+    setTimeout(() => {
+      setCurrentPage('bmi-result');
+      setTimeout(() => {
+        setCurrentPage('progress');
+        startProgressAnimation();
+        
+        // Notify server to emit progress-start to Android
+        fetch(`${serverBase}/api/progress-start`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({ bmiId })
+        }).catch(e => console.error('Progress start notification error:', e));
+      }, 5000);
+    }, 5000);
   }
 
   const startProgressAnimation = () => {
-    // Clear any existing interval
-    if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = null;
-    }
-    
     setProgressValue(0);
-    progressIntervalRef.current = setInterval(() => {
+    const interval = setInterval(() => {
       setProgressValue(prev => {
         if (prev >= 100) {
-          if (progressIntervalRef.current) {
-            clearInterval(progressIntervalRef.current);
-            progressIntervalRef.current = null;
-          }
+          clearInterval(interval);
           generateFortune();
           return 100;
         }
@@ -573,16 +371,6 @@ function App() {
       });
     }, 50);
   }
-  
-  // Cleanup interval on unmount
-  useEffect(() => {
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      }
-    };
-  }, []);
 
   const generateFortune = async () => {
     try {
@@ -674,9 +462,7 @@ function App() {
     case 'payment':
       return <PaymentPage {...pageProps} />
     case 'waiting':
-      return <WaitingPage {...pageProps} socketRef={socketRef} />
-    case 'analyzing':
-      return <AnalyzingPage {...pageProps} socketRef={socketRef} token={token} onNavigate={setCurrentPage} />
+      return <WaitingPage {...pageProps} />
     case 'bmi-result':
       return <BMIResultPage {...pageProps} />
     case 'progress':
