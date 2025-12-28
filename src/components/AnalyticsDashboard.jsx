@@ -33,6 +33,7 @@ function AnalyticsDashboard({ userId }) {
   const cardsRef = useRef(null)
   const streakRef = useRef(null)
   const chartRef = useRef(null)
+  const weightChartRef = useRef(null)
 
   useEffect(() => {
     fetchAnalytics()
@@ -108,7 +109,7 @@ function AnalyticsDashboard({ userId }) {
       )
     }
 
-    // Animate chart container
+    // Animate chart containers
     if (chartRef.current) {
       gsap.fromTo(chartRef.current,
         { opacity: 0, x: -50 },
@@ -117,6 +118,19 @@ function AnalyticsDashboard({ userId }) {
           x: 0,
           duration: 0.8,
           delay: 0.5,
+          ease: "power2.out"
+        }
+      )
+    }
+
+    if (weightChartRef.current) {
+      gsap.fromTo(weightChartRef.current,
+        { opacity: 0, x: 50 },
+        { 
+          opacity: 1, 
+          x: 0,
+          duration: 0.8,
+          delay: 0.7,
           ease: "power2.out"
         }
       )
@@ -192,6 +206,74 @@ function AnalyticsDashboard({ userId }) {
         },
         ticks: {
           color: '#6b7280',
+        },
+      },
+      x: {
+        grid: {
+          display: false,
+        },
+        ticks: {
+          color: '#6b7280',
+        },
+      },
+    },
+    animation: {
+      duration: 2000,
+      easing: 'easeInOutQuart',
+    },
+  }
+
+  const weightChartData = {
+    labels: analytics?.trends?.map(t => new Date(t.date).toLocaleDateString()) || [],
+    datasets: [
+      {
+        label: 'Weight Trend',
+        data: analytics?.trends?.map(t => t.weight) || [],
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        borderWidth: 3,
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: '#3b82f6',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: 6,
+        pointHoverRadius: 8,
+      },
+    ],
+  }
+
+  const weightChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleColor: '#ffffff',
+        bodyColor: '#ffffff',
+        borderColor: '#3b82f6',
+        borderWidth: 1,
+        callbacks: {
+          label: function(context) {
+            return `Weight: ${context.parsed.y.toFixed(1)} kg`;
+          }
+        }
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: false,
+        grid: {
+          color: 'rgba(0, 0, 0, 0.1)',
+        },
+        ticks: {
+          color: '#6b7280',
+          callback: function(value) {
+            return value.toFixed(1) + ' kg';
+          }
         },
       },
       x: {
@@ -387,6 +469,16 @@ function AnalyticsDashboard({ userId }) {
             <h3 className="text-xl font-bold text-gray-900 mb-6">BMI Trend (Last 30 Days)</h3>
             <div className="h-64">
               <Line data={lineChartData} options={lineChartOptions} />
+            </div>
+          </div>
+        )}
+
+        {/* Weight Trend Chart */}
+        {analytics.trends?.length > 0 && (
+          <div ref={weightChartRef} className="card">
+            <h3 className="text-xl font-bold text-gray-900 mb-6">Weight Trend (Last 30 Days)</h3>
+            <div className="h-64">
+              <Line data={weightChartData} options={weightChartOptions} />
             </div>
           </div>
         )}
