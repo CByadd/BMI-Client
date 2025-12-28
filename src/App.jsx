@@ -91,8 +91,7 @@ function App() {
     } else {
       // Updated to point to Server instead of Adscape-Server
       // TODO: Update this URL to your server deployment URL
-      // setServerBase('https://bmi-server-eight.vercel.app') // Change to your server URL
-      setServerBase(' https://wan-changeable-efferently.ngrok-free.dev') // Change to your server URL
+      setServerBase('https://bmi-server-eight.vercel.app') // Change to your server URL
     }
   }, [])
 
@@ -218,42 +217,27 @@ function App() {
 
   const handleAuth = async (userData) => {
     console.log('[AUTH] Starting authentication for:', userData);
-    
     try {
-      let userId = userData.userId;
+      const res = await fetch(`${serverBase}/api/user`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({ name: userData.name, mobile: userData.mobile })
+      });
+      const userResponse = await res.json();
+      if (!res.ok) throw new Error(userResponse.error || 'Failed to create user');
       
-      // If userId not provided, fallback to old API (for backward compatibility)
-      if (!userId) {
-        try {
-          const res = await fetch(`${serverBase}/api/user`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': 'true'
-            },
-            body: JSON.stringify({ name: userData.name, mobile: userData.mobile })
-          });
-          const userResponse = await res.json();
-          if (res.ok && userResponse.userId) {
-            userId = userResponse.userId;
-            console.log('[AUTH] User created successfully via fallback API:', userResponse);
-          }
-        } catch (e) {
-          console.error('[AUTH] Fallback API error:', e);
-        }
-      } else {
-        console.log('[AUTH] User authenticated via OTP:', userData);
-      }
-      
-      // Set user state
-      setUser({ ...userData, userId: userId });
-      localStorage.setItem('bmi_user', JSON.stringify({ ...userData, userId: userId }));
+      console.log('[AUTH] User created successfully:', userResponse);
+      setUser({ ...userData, userId: userResponse.userId });
+      localStorage.setItem('bmi_user', JSON.stringify({ ...userData, userId: userResponse.userId }));
       
       // Check if this is a QR code visit or direct visit
       const isQRCodeVisit = !!(screenId && bmiId)
       
       // If F2 QR code visit, link the user to the BMI record immediately after login
-      if (isQRCodeVisit && bmiId && userId && fromPlayerAppF2) {
+      if (isQRCodeVisit && bmiId && userResponse.userId && fromPlayerAppF2) {
         try {
           console.log('[AUTH] F2 Flow: Linking user to BMI record immediately:', bmiId);
           await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
@@ -262,7 +246,7 @@ function App() {
               'Content-Type': 'application/json',
               'ngrok-skip-browser-warning': 'true'
             },
-            body: JSON.stringify({ userId: userId })
+            body: JSON.stringify({ userId: userResponse.userId })
           });
           console.log('[AUTH] F2 Flow: Successfully linked user to BMI record');
         } catch (linkError) {
