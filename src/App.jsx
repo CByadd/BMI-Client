@@ -218,26 +218,36 @@ function App() {
   const handleAuth = async (userData) => {
     console.log('[AUTH] Starting authentication for:', userData);
     try {
-      const res = await fetch(`${serverBase}/api/user`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({ name: userData.name, mobile: userData.mobile })
-      });
-      const userResponse = await res.json();
-      if (!res.ok) throw new Error(userResponse.error || 'Failed to create user');
+      // If user is already authenticated via OTP (has userId and token), skip user creation
+      let finalUserData = userData;
       
-      console.log('[AUTH] User created successfully:', userResponse);
-      setUser({ ...userData, userId: userResponse.userId });
-      localStorage.setItem('bmi_user', JSON.stringify({ ...userData, userId: userResponse.userId }));
+      if (!userData.userId) {
+        // Legacy flow: Create user via API
+        const res = await fetch(`${serverBase}/api/user`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          },
+          body: JSON.stringify({ name: userData.name, mobile: userData.mobile })
+        });
+        const userResponse = await res.json();
+        if (!res.ok) throw new Error(userResponse.error || 'Failed to create user');
+        
+        console.log('[AUTH] User created successfully:', userResponse);
+        finalUserData = { ...userData, userId: userResponse.userId };
+      } else {
+        console.log('[AUTH] User already authenticated via OTP:', userData.userId);
+      }
+      
+      setUser(finalUserData);
+      localStorage.setItem('bmi_user', JSON.stringify(finalUserData));
       
       // Check if this is a QR code visit or direct visit
       const isQRCodeVisit = !!(screenId && bmiId)
       
       // If F2 QR code visit, link the user to the BMI record immediately after login
-      if (isQRCodeVisit && bmiId && userResponse.userId && fromPlayerAppF2) {
+      if (isQRCodeVisit && bmiId && finalUserData.userId && fromPlayerAppF2) {
         try {
           console.log('[AUTH] F2 Flow: Linking user to BMI record immediately:', bmiId);
           await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
@@ -246,7 +256,7 @@ function App() {
               'Content-Type': 'application/json',
               'ngrok-skip-browser-warning': 'true'
             },
-            body: JSON.stringify({ userId: userResponse.userId })
+            body: JSON.stringify({ userId: finalUserData.userId })
           });
           console.log('[AUTH] F2 Flow: Successfully linked user to BMI record');
         } catch (linkError) {

@@ -1,10 +1,46 @@
 import { useEffect, useState, useRef } from 'react'
 import { gsap } from 'gsap'
 
-function PaymentPage({ user, onPaymentSuccess }) {
+function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
   const [processing, setProcessing] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState(9) // Default amount
+  const [loadingAmount, setLoadingAmount] = useState(true)
   const containerRef = useRef(null)
   const cardRef = useRef(null)
+  
+  // Fetch payment amount for this screen
+  useEffect(() => {
+    const fetchPaymentAmount = async () => {
+      if (!screenId || !serverBase) {
+        setLoadingAmount(false)
+        return
+      }
+      
+      try {
+        const response = await fetch(`${serverBase}/api/adscape/player/${screenId}`, {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+          }
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          if (data.ok && data.player && data.player.paymentAmount !== null && data.player.paymentAmount !== undefined) {
+            setPaymentAmount(data.player.paymentAmount)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching payment amount:', error)
+        // Use default amount on error
+      } finally {
+        setLoadingAmount(false)
+      }
+    }
+    
+    fetchPaymentAmount()
+  }, [screenId, serverBase])
 
   useEffect(() => {
     if (containerRef.current && cardRef.current) {
@@ -83,7 +119,11 @@ function PaymentPage({ user, onPaymentSuccess }) {
                 <p className="text-gray-600 text-sm">Complete health assessment</p>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-primary-600">₹9</div>
+                {loadingAmount ? (
+                  <div className="text-3xl font-bold text-primary-600">...</div>
+                ) : (
+                  <div className="text-3xl font-bold text-primary-600">₹{paymentAmount}</div>
+                )}
                 {/* <div className="text-sm text-gray-500 line-through">₹199</div> */}
               </div>
             </div>
@@ -120,7 +160,7 @@ function PaymentPage({ user, onPaymentSuccess }) {
                   Processing Payment...
                 </div>
               ) : (
-                'Pay ₹9 - Secure Payment'
+                `Pay ₹${paymentAmount} - Secure Payment`
               )}
             </button>
           </div>
