@@ -93,6 +93,13 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
         repeat: 1
       })
 
+      // Validate payment amount before creating order
+      if (!paymentAmount || paymentAmount <= 0 || isNaN(paymentAmount)) {
+        alert('Invalid payment amount. Please contact support.')
+        setProcessing(false)
+        return
+      }
+
       // Create Razorpay order
       const orderResponse = await fetch(`${serverBase}/api/payment/create-order`, {
         method: 'POST',
@@ -101,9 +108,11 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
           'ngrok-skip-browser-warning': 'true'
         },
         body: JSON.stringify({
-          amount: paymentAmount,
+          amount: Number(paymentAmount), // Ensure it's a number
           currency: 'INR',
-          receipt: `receipt_${Date.now()}_${user?.userId || 'user'}`,
+          // Razorpay receipt must be max 40 characters
+          // Format: rcpt + timestamp + first 8 chars of userId (total: ~26 chars)
+          receipt: `rcpt${Date.now()}${(user?.userId || 'user').substring(0, 8)}`,
           notes: {
             userId: user?.userId || '',
             screenId: screenId || '',
@@ -114,7 +123,16 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
       })
 
       if (!orderResponse.ok) {
-        throw new Error('Failed to create payment order')
+        // Try to get error details from response
+        let errorMessage = 'Failed to create payment order'
+        try {
+          const errorData = await orderResponse.json()
+          errorMessage = errorData.details || errorData.message || errorMessage
+          console.error('Payment order error:', errorData)
+        } catch (e) {
+          console.error('Failed to parse error response:', e)
+        }
+        throw new Error(errorMessage)
       }
 
       const orderData = await orderResponse.json()
