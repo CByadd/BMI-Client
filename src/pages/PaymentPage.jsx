@@ -5,19 +5,21 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
   const [processing, setProcessing] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState(9) // Default amount
   const [loadingAmount, setLoadingAmount] = useState(true)
+  const [razorpayKey, setRazorpayKey] = useState(null)
   const containerRef = useRef(null)
   const cardRef = useRef(null)
   
-  // Fetch payment amount for this screen
+  // Fetch Razorpay key and payment amount for this screen
   useEffect(() => {
-    const fetchPaymentAmount = async () => {
-      if (!screenId || !serverBase) {
+    const fetchPaymentConfig = async () => {
+      if (!serverBase) {
         setLoadingAmount(false)
         return
       }
       
       try {
-        const response = await fetch(`${serverBase}/api/adscape/player/${screenId}`, {
+        // Fetch Razorpay key
+        const keyResponse = await fetch(`${serverBase}/api/payment/key`, {
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
@@ -25,21 +27,39 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
           }
         })
         
-        if (response.ok) {
-          const data = await response.json()
-          if (data.ok && data.player && data.player.paymentAmount !== null && data.player.paymentAmount !== undefined) {
-            setPaymentAmount(data.player.paymentAmount)
+        if (keyResponse.ok) {
+          const keyData = await keyResponse.json()
+          if (keyData.ok && keyData.key_id) {
+            setRazorpayKey(keyData.key_id)
+          }
+        }
+        
+        // Fetch payment amount
+        if (screenId) {
+          const amountResponse = await fetch(`${serverBase}/api/adscape/player/${screenId}`, {
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true'
+            }
+          })
+          
+          if (amountResponse.ok) {
+            const data = await amountResponse.json()
+            if (data.ok && data.player && data.player.paymentAmount !== null && data.player.paymentAmount !== undefined) {
+              setPaymentAmount(data.player.paymentAmount)
+            }
           }
         }
       } catch (error) {
-        console.error('Error fetching payment amount:', error)
+        console.error('Error fetching payment config:', error)
         // Use default amount on error
       } finally {
         setLoadingAmount(false)
       }
     }
     
-    fetchPaymentAmount()
+    fetchPaymentConfig()
   }, [screenId, serverBase])
 
   useEffect(() => {
@@ -57,29 +77,134 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
   }, [])
 
   const handlePayment = async () => {
+    if (!razorpayKey || !serverBase) {
+      alert('Payment system not ready. Please try again.')
+      return
+    }
+
     setProcessing(true)
     
-    // Animate button
-    gsap.to('.payment-btn', {
-      scale: 0.95,
-      duration: 0.1,
-      yoyo: true,
-      repeat: 1
-    })
-    
-    // Simulate payment processing with loading animation
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    setProcessing(false)
-    
-    // Success animation
-    gsap.to(containerRef.current, {
-      scale: 1.05,
-      duration: 0.3,
-      yoyo: true,
-      repeat: 1,
-      ease: "power2.inOut",
-      onComplete: onPaymentSuccess
-    })
+    try {
+      // Animate button
+      gsap.to('.payment-btn', {
+        scale: 0.95,
+        duration: 0.1,
+        yoyo: true,
+        repeat: 1
+      })
+
+      // Create Razorpay order
+      const orderResponse = await fetch(`${serverBase}/api/payment/create-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({
+          amount: paymentAmount,
+          currency: 'INR',
+          receipt: `receipt_${Date.now()}_${user?.userId || 'user'}`,
+          notes: {
+            userId: user?.userId || '',
+            screenId: screenId || '',
+            userName: user?.name || '',
+            userMobile: user?.mobile || ''
+          }
+        })
+      })
+
+      if (!orderResponse.ok) {
+        throw new Error('Failed to create payment order')
+      }
+
+      const orderData = await orderResponse.json()
+      if (!orderData.ok || !orderData.order) {
+        throw new Error('Invalid order response')
+      }
+
+      const orderId = orderData.order.id
+
+      // Configure Razorpay options
+      const options = {
+        key: razorpayKey,
+        amount: orderData.order.amount,
+        currency: orderData.order.currency,
+        name: 'Well2Day',
+        description: 'BMI Analysis Payment',
+        order_id: orderId,
+        handler: async function (response) {
+          try {
+            // Verify payment on server
+            const verifyResponse = await fetch(`${serverBase}/api/payment/verify`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
+              },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              })
+            })
+
+            const verifyData = await verifyResponse.json()
+
+            if (verifyData.ok && verifyData.verified) {
+              // Payment verified successfully
+              setProcessing(false)
+              
+              // Success animation
+              gsap.to(containerRef.current, {
+                scale: 1.05,
+                duration: 0.3,
+                yoyo: true,
+                repeat: 1,
+                ease: "power2.inOut",
+                onComplete: onPaymentSuccess
+              })
+            } else {
+              throw new Error('Payment verification failed')
+            }
+          } catch (error) {
+            console.error('Payment verification error:', error)
+            setProcessing(false)
+            alert('Payment verification failed. Please contact support.')
+          }
+        },
+        prefill: {
+          name: user?.name || '',
+          email: user?.email || '',
+          contact: user?.mobile || ''
+        },
+        notes: {
+          userId: user?.userId || '',
+          screenId: screenId || ''
+        },
+        theme: {
+          color: '#3399cc'
+        },
+        modal: {
+          ondismiss: function() {
+            setProcessing(false)
+          }
+        }
+      }
+
+      // Open Razorpay checkout
+      const rzp = new window.Razorpay(options)
+      rzp.on('payment.failed', function (response) {
+        console.error('Payment failed:', response)
+        setProcessing(false)
+        alert(`Payment failed: ${response.error.description || 'Unknown error'}`)
+      })
+      
+      rzp.open()
+    } catch (error) {
+      console.error('Payment error:', error)
+      setProcessing(false)
+      alert('Failed to initiate payment. Please try again.')
+    }
   }
 
   return (
