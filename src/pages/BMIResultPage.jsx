@@ -20,32 +20,44 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
     return 'bg-red-50 border-red-200'
   }
 
-  // Calculate ideal weight range for height (BMI 18.5-24.9)
-  const calculateIdealWeightRange = (heightCm) => {
+  // Calculate recommended weight based on height
+  // Formula: Ideal weight range for BMI 18.5-24.9
+  const calculateWeightRecommendation = (heightCm) => {
     const heightM = heightCm / 100
     const minWeight = 18.5 * (heightM * heightM)
     const maxWeight = 24.9 * (heightM * heightM)
+    const idealWeight = ((minWeight + maxWeight) / 2) // Average ideal weight
+    
     return {
       min: Math.round(minWeight * 10) / 10,
-      max: Math.round(maxWeight * 10) / 10
+      max: Math.round(maxWeight * 10) / 10,
+      ideal: Math.round(idealWeight * 10) / 10
     }
   }
 
-  // Calculate recommended daily water consumption (ml per kg body weight)
-  const calculateWaterConsumption = (weightKg) => {
-    // Standard: 30-35ml per kg body weight per day
-    // Using 33ml/kg as a middle ground
-    const waterLiters = (weightKg * 0.033).toFixed(1)
-    const waterMl = Math.round(weightKg * 33)
+  // Calculate recommended daily water consumption based on height
+  // Formula: Height-based water intake recommendation
+  // Base: 1.5L for 150cm, scales with height (0.25L per 10cm above 150cm)
+  // Minimum: 1.5L, Maximum: 4L
+  const calculateWaterRecommendation = (heightCm) => {
+    const baseHeight = 150 // cm
+    const baseWater = 1.5 // liters
+    const additionalWater = Math.max(0, (heightCm - baseHeight) / 10) * 0.25
+    const totalLiters = baseWater + additionalWater
+    
+    // Ensure minimum of 1.5L and maximum reasonable of 4L
+    const waterLiters = Math.max(1.5, Math.min(4.0, totalLiters))
+    const waterMl = Math.round(waterLiters * 1000)
+    
     return {
-      liters: parseFloat(waterLiters),
+      liters: parseFloat(waterLiters.toFixed(1)),
       ml: waterMl,
       cups: Math.round(waterMl / 250) // Approximate cups (1 cup = 250ml)
     }
   }
 
-  const idealWeight = data?.height ? calculateIdealWeightRange(data.height) : null
-  const waterRecommendation = data?.weight ? calculateWaterConsumption(data.weight) : null
+  const weightRecommendation = data?.height ? calculateWeightRecommendation(data.height) : null
+  const waterRecommendation = data?.height ? calculateWaterRecommendation(data.height) : null
 
   useEffect(() => {
     if (containerRef.current && bmiValueRef.current && cardsRef.current) {
@@ -180,24 +192,29 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
         </div>
 
         {/* Recommendations Section */}
-        {(idealWeight || waterRecommendation) && (
+        {(weightRecommendation || waterRecommendation) && (
           <div className="space-y-6 mb-8">
-            {/* Ideal Weight Suggestion */}
-            {idealWeight && data?.height && (
-              <div className="card bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200">
+            {/* Weight Recommendation */}
+            {weightRecommendation && data?.height && (
+              <div className="card bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200">
                 <div className="flex items-start">
-                  <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                  <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                     </svg>
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Ideal Weight Range</h3>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Weight Recommendation</h3>
                     <p className="text-gray-700 mb-3">
-                      For your height of <span className="font-semibold">{data.height} cm</span>, the ideal weight range for a healthy BMI (18.5-24.9) is:
+                      For your height of <span className="font-semibold">{data.height} cm</span>, the recommended weight range for a healthy BMI (18.5-24.9) is:
                     </p>
-                    <div className="inline-flex items-center space-x-2 bg-white rounded-lg px-4 py-2 border-2 border-blue-300">
-                      <span className="text-2xl font-bold text-blue-600">{idealWeight.min} - {idealWeight.max} kg</span>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="inline-flex items-center space-x-2 bg-white rounded-lg px-4 py-2 border-2 border-green-300">
+                        <span className="text-2xl font-bold text-green-600">{weightRecommendation.min} - {weightRecommendation.max} kg</span>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        Ideal: <span className="font-semibold">{weightRecommendation.ideal} kg</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -205,7 +222,7 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
             )}
 
             {/* Water Consumption Recommendation */}
-            {waterRecommendation && data?.weight && (
+            {waterRecommendation && data?.height && (
               <div className="card bg-gradient-to-r from-cyan-50 to-blue-50 border-2 border-cyan-200">
                 <div className="flex items-start">
                   <div className="w-12 h-12 bg-cyan-500 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
@@ -214,9 +231,9 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
                     </svg>
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Daily Water Intake</h3>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Water Intake Recommendation</h3>
                     <p className="text-gray-700 mb-3">
-                      Based on your weight of <span className="font-semibold">{data.weight} kg</span>, recommended daily water consumption:
+                      Based on your height of <span className="font-semibold">{data.height} cm</span>, the recommended daily water intake is:
                     </p>
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="inline-flex items-center space-x-2 bg-white rounded-lg px-4 py-2 border-2 border-cyan-300">

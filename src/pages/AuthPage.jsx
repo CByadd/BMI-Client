@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { gsap } from 'gsap'
+import ScreenLogo from '../components/ScreenLogo'
 
 function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
   const [name, setName] = useState('')
@@ -195,6 +196,7 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
     return (
       <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
         <div ref={containerRef} className="w-full max-w-md">
+          <ScreenLogo screenId={screenId} serverBase={serverBase} />
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-2xl mb-4">
               <svg className="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -284,6 +286,7 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
     return (
       <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
         <div ref={containerRef} className="w-full max-w-md">
+          <ScreenLogo screenId={screenId} serverBase={serverBase} />
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-2xl mb-4">
               <svg className="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -350,6 +353,7 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
   return (
     <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
       <div ref={containerRef} className="w-full max-w-md">
+        <ScreenLogo screenId={screenId} serverBase={serverBase} />
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-100 rounded-2xl mb-4">
             <svg className="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

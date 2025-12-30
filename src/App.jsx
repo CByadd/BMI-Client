@@ -8,6 +8,7 @@ import ProgressPage from './pages/ProgressPage'
 import FortunePage from './pages/FortunePage'
 import DashboardPage from './pages/DashboardPage'
 import AnalyticsPage from './pages/AnalyticsPage'
+import DevPanel from './components/DevPanel'
 
 function useQueryParams() {
   return useMemo(() => new URLSearchParams(window.location.search), [])
@@ -466,26 +467,35 @@ function App() {
     onNavigate: setCurrentPage
   }
 
-  switch (currentPage) {
-    case 'auth':
-      return <AuthPage {...pageProps} />
-    case 'payment':
-      return <PaymentPage {...pageProps} />
-    case 'waiting':
-      return <WaitingPage {...pageProps} />
-    case 'bmi-result':
-      return <BMIResultPage {...pageProps} />
-    case 'progress':
-      return <ProgressPage {...pageProps} />
-    case 'fortune':
-      return <FortunePage message={fortuneMessage} onNavigate={setCurrentPage} {...pageProps} />
-    case 'dashboard':
-      return <DashboardPage {...pageProps} />
-    case 'analytics':
-      return <AnalyticsPage {...pageProps} />
-    default:
-      return <AuthPage {...pageProps} />
-  }
+  const currentPageComponent = (() => {
+    switch (currentPage) {
+      case 'auth':
+        return <AuthPage {...pageProps} />
+      case 'payment':
+        return <PaymentPage {...pageProps} />
+      case 'waiting':
+        return <WaitingPage {...pageProps} />
+      case 'bmi-result':
+        return <BMIResultPage {...pageProps} />
+      case 'progress':
+        return <ProgressPage {...pageProps} />
+      case 'fortune':
+        return <FortunePage message={fortuneMessage} onNavigate={setCurrentPage} {...pageProps} />
+      case 'dashboard':
+        return <DashboardPage {...pageProps} />
+      case 'analytics':
+        return <AnalyticsPage {...pageProps} />
+      default:
+        return <AuthPage {...pageProps} />
+    }
+  })()
+
+  return (
+    <>
+      {currentPageComponent}
+      <DevPanel />
+    </>
+  )
 }
 
 export default App

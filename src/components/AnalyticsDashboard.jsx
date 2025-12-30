@@ -28,6 +28,7 @@ function AnalyticsDashboard({ userId }) {
   const [analytics, setAnalytics] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showRecordDetails, setShowRecordDetails] = useState(false)
   
   const dashboardRef = useRef(null)
   const cardsRef = useRef(null)
@@ -163,8 +164,45 @@ function AnalyticsDashboard({ userId }) {
     }
   }
 
+  // Calculate recommended weight based on height
+  const calculateWeightRecommendation = (heightCm) => {
+    const heightM = heightCm / 100
+    const minWeight = 18.5 * (heightM * heightM)
+    const maxWeight = 24.9 * (heightM * heightM)
+    const idealWeight = ((minWeight + maxWeight) / 2)
+    
+    return {
+      min: Math.round(minWeight * 10) / 10,
+      max: Math.round(maxWeight * 10) / 10,
+      ideal: Math.round(idealWeight * 10) / 10
+    }
+  }
+
+  // Calculate recommended daily water consumption based on height
+  const calculateWaterRecommendation = (heightCm) => {
+    const baseHeight = 150 // cm
+    const baseWater = 1.5 // liters
+    const additionalWater = Math.max(0, (heightCm - baseHeight) / 10) * 0.25
+    const totalLiters = baseWater + additionalWater
+    
+    const waterLiters = Math.max(1.5, Math.min(4.0, totalLiters))
+    const waterMl = Math.round(waterLiters * 1000)
+    
+    return {
+      liters: parseFloat(waterLiters.toFixed(1)),
+      ml: waterMl,
+      cups: Math.round(waterMl / 250)
+    }
+  }
+
+  const weightRecommendation = analytics?.recentBMI?.height ? calculateWeightRecommendation(analytics.recentBMI.height) : null
+  const waterRecommendation = analytics?.recentBMI?.height ? calculateWaterRecommendation(analytics.recentBMI.height) : null
+
   const lineChartData = {
-    labels: analytics?.trends?.map(t => new Date(t.date).toLocaleDateString()) || [],
+    labels: analytics?.trends?.map(t => {
+      const date = new Date(t.date)
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    }) || [],
     datasets: [
       {
         label: 'BMI Trend',
@@ -196,6 +234,35 @@ function AnalyticsDashboard({ userId }) {
         bodyColor: '#ffffff',
         borderColor: '#F3841C',
         borderWidth: 1,
+        callbacks: {
+          title: function(context) {
+            const index = context[0].dataIndex
+            const trend = analytics?.trends?.[index]
+            if (trend?.timestamp) {
+              const date = new Date(trend.timestamp)
+              return date.toLocaleDateString('en-US', { 
+                weekday: 'short',
+                year: 'numeric',
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              })
+            }
+            return context[0].label
+          },
+          afterBody: function(context) {
+            const index = context[0].dataIndex
+            const trend = analytics?.trends?.[index]
+            if (trend?.screenId) {
+              return [`Screen ID: ${trend.screenId.slice(-8)}`]
+            }
+            return []
+          },
+          label: function(context) {
+            return `BMI: ${context.parsed.y.toFixed(1)}`
+          }
+        }
       },
     },
     scales: {
@@ -462,37 +529,159 @@ function AnalyticsDashboard({ userId }) {
       </div>
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* BMI Trend Chart */}
+      <div className="space-y-8">
+        {/* BMI Trend Chart with Screen Info */}
         {analytics.trends?.length > 0 && (
           <div ref={chartRef} className="card">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">BMI Trend (Last 30 Days)</h3>
-            <div className="h-64">
+            <h3 className="text-xl font-bold text-gray-900 mb-6">BMI Records by Screen & Date</h3>
+            <div className="h-64 mb-6">
               <Line data={lineChartData} options={lineChartOptions} />
             </div>
-          </div>
-        )}
-
-        {/* Weight Trend Chart */}
-        {analytics.trends?.length > 0 && (
-          <div ref={weightChartRef} className="card">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">Weight Trend (Last 30 Days)</h3>
-            <div className="h-64">
-              <Line data={weightChartData} options={weightChartOptions} />
+            
+            {/* Screen Information Table - Collapsible */}
+            <div className="mt-6 border-t pt-6">
+              <button
+                onClick={() => setShowRecordDetails(!showRecordDetails)}
+                className="flex items-center justify-between w-full text-left mb-4 hover:opacity-80 transition-opacity"
+              >
+                <h4 className="text-lg font-semibold text-gray-900">Record Details</h4>
+                <svg
+                  className={`w-5 h-5 text-gray-600 transition-transform duration-200 ${showRecordDetails ? 'transform rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              
+              {showRecordDetails && (
+                <div className="overflow-x-auto animate-in fade-in duration-200">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 text-gray-700 font-semibold">Date & Time</th>
+                        <th className="text-left py-3 px-4 text-gray-700 font-semibold">BMI</th>
+                        <th className="text-left py-3 px-4 text-gray-700 font-semibold">Weight (kg)</th>
+                        <th className="text-left py-3 px-4 text-gray-700 font-semibold">Screen Name</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analytics.trends.map((trend, index) => (
+                        <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4 text-gray-900">
+                            {new Date(trend.timestamp || trend.date).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </td>
+                          <td className="py-3 px-4 text-gray-900 font-medium">{trend.bmi.toFixed(1)}</td>
+                          <td className="py-3 px-4 text-gray-900">{trend.weight.toFixed(1)}</td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                              {trend.screenName || trend.screenId || 'N/A'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Category Distribution */}
-        {Object.keys(analytics.categoryDistribution).length > 0 && (
-          <div className="card">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">Category Distribution</h3>
-            <div className="h-64">
-              <Doughnut data={doughnutData} options={doughnutOptions} />
+        {/* Other Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Weight Trend Chart */}
+          {analytics.trends?.length > 0 && (
+            <div ref={weightChartRef} className="card">
+              <h3 className="text-xl font-bold text-gray-900 mb-6">Weight Trend (Last 30 Days)</h3>
+              <div className="h-64">
+                <Line data={weightChartData} options={weightChartOptions} />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Category Distribution */}
+          {Object.keys(analytics.categoryDistribution).length > 0 && (
+            <div className="card">
+              <h3 className="text-xl font-bold text-gray-900 mb-6">Category Distribution</h3>
+              <div className="h-64">
+                <Doughnut data={doughnutData} options={doughnutOptions} />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Recommendations Section */}
+      {(weightRecommendation || waterRecommendation) && analytics?.recentBMI?.height && (
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold text-gray-900">Health Recommendations</h2>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Weight Recommendation */}
+            {weightRecommendation && (
+              <div className="card bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200">
+                <div className="flex items-start">
+                  <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Weight Recommendation</h3>
+                    <p className="text-gray-700 mb-3">
+                      For your height of <span className="font-semibold">{analytics.recentBMI.height} cm</span>, the recommended weight range for a healthy BMI (18.5-24.9) is:
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="inline-flex items-center space-x-2 bg-white rounded-lg px-4 py-2 border-2 border-green-300">
+                        <span className="text-2xl font-bold text-green-600">{weightRecommendation.min} - {weightRecommendation.max} kg</span>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        Ideal: <span className="font-semibold">{weightRecommendation.ideal} kg</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Water Consumption Recommendation */}
+            {waterRecommendation && (
+              <div className="card bg-gradient-to-r from-cyan-50 to-blue-50 border-2 border-cyan-200">
+                <div className="flex items-start">
+                  <div className="w-12 h-12 bg-cyan-500 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Water Intake Recommendation</h3>
+                    <p className="text-gray-700 mb-3">
+                      Based on your height of <span className="font-semibold">{analytics.recentBMI.height} cm</span>, the recommended daily water intake is:
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="inline-flex items-center space-x-2 bg-white rounded-lg px-4 py-2 border-2 border-cyan-300">
+                        <span className="text-2xl font-bold text-cyan-600">{waterRecommendation.liters} L</span>
+                        <span className="text-sm text-gray-600">({waterRecommendation.ml} ml)</span>
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        ≈ {waterRecommendation.cups} cups (250ml each)
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Recent Activity */}
       {analytics.recentBMI && (
