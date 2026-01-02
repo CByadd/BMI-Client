@@ -12,7 +12,8 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
   const [processing, setProcessing] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState(9) // Default amount
   const [loadingAmount, setLoadingAmount] = useState(true)
-  const [razorpayKey, setRazorpayKey] = useState(null)
+  const [razorpayKey, setRazorpayKey] = useState(null) // Not used in mock mode, kept for compatibility
+  const [mockMode, setMockMode] = useState(false)
   const containerRef = useRef(null)
   const cardRef = useRef(null)
   
@@ -31,10 +32,19 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
           updateBaseURL(serverBase)
         }
         
-        // Fetch Razorpay key
-        const keyData = await api.getPaymentKey()
-        if (keyData.ok && keyData.key_id) {
-          setRazorpayKey(keyData.key_id)
+        // Fetch payment key (mock mode - not required but kept for compatibility)
+        try {
+          const keyData = await api.getPaymentKey()
+          if (keyData.ok && keyData.key_id) {
+            setRazorpayKey(keyData.key_id)
+            if (keyData.mockMode) {
+              setMockMode(true)
+              console.log('[PAYMENT] 🧪 MOCK MODE: Payment system in mock mode')
+            }
+          }
+        } catch (error) {
+          setMockMode(true) // Assume mock mode if key fetch fails
+          console.log('[PAYMENT] 🧪 MOCK MODE: Using mock payment (key fetch optional)')
         }
         
         // Fetch payment amount
@@ -70,7 +80,7 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
   }, [])
 
   const handlePayment = async () => {
-    if (!razorpayKey || !serverBase) {
+    if (!serverBase) {
       alert('Payment system not ready. Please try again.')
       return
     }
@@ -93,12 +103,10 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
         return
       }
 
-      // Create Razorpay order
+      // Create mock payment order
       const orderData = await api.createPaymentOrder({
         amount: Number(paymentAmount), // Ensure it's a number
         currency: 'INR',
-        // Razorpay receipt must be max 40 characters
-        // Format: rcpt + timestamp + first 8 chars of userId (total: ~26 chars)
         receipt: `rcpt${Date.now()}${(user?.userId || 'user').substring(0, 8)}`,
         notes: {
           userId: user?.userId || '',
@@ -114,77 +122,64 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
 
       const orderId = orderData.order.id
 
-      // Configure Razorpay options
-      const options = {
-        key: razorpayKey,
-        amount: orderData.order.amount,
-        currency: orderData.order.currency,
-        name: 'Well2Day',
-        description: 'BMI Analysis Payment',
-        order_id: orderId,
-        handler: async function (response) {
-          try {
-            // Verify payment on server
-            const verifyData = await api.verifyPayment({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature
-            })
+      // ============================================
+      // RAZORPAY IMPLEMENTATION (COMMENTED OUT)
+      // ============================================
+      // // Configure Razorpay options
+      // const options = {
+      //   key: razorpayKey,
+      //   amount: orderData.order.amount,
+      //   currency: orderData.order.currency,
+      //   name: 'Well2Day',
+      //   description: 'BMI Analysis Payment',
+      //   order_id: orderId,
+      //   handler: async function (response) { ... },
+      //   ...
+      // }
+      // const rzp = new window.Razorpay(options)
+      // rzp.open()
 
-            if (verifyData.ok && verifyData.verified) {
-              // Payment verified successfully
-              setProcessing(false)
-              
-              // Success animation
-              gsap.to(containerRef.current, {
-                scale: 1.05,
-                duration: 0.3,
-                yoyo: true,
-                repeat: 1,
-                ease: "power2.inOut",
-                onComplete: onPaymentSuccess
-              })
-            } else {
-              throw new Error('Payment verification failed')
-            }
-          } catch (error) {
-            console.error('Payment verification error:', error)
-            setProcessing(false)
-            alert('Payment verification failed. Please contact support.')
-          }
-        },
-        prefill: {
-          name: user?.name || '',
-          email: user?.email || '',
-          contact: user?.mobile || ''
-        },
-        notes: {
-          userId: user?.userId || '',
-          screenId: screenId || ''
-        },
-        theme: {
-          color: '#3399cc'
-        },
-        modal: {
-          ondismiss: function() {
-            setProcessing(false)
-          }
-        }
-      }
-
-      // Open Razorpay checkout
-      const rzp = new window.Razorpay(options)
-      rzp.on('payment.failed', function (response) {
-        console.error('Payment failed:', response)
-        setProcessing(false)
-        alert(`Payment failed: ${response.error.description || 'Unknown error'}`)
-      })
+      // ============================================
+      // MOCK PAYMENT IMPLEMENTATION
+      // ============================================
+      console.log('[PAYMENT] 🧪 MOCK: Simulating payment process...')
       
-      rzp.open()
+      // Simulate payment processing delay (2 seconds)
+      await new Promise(resolve => setTimeout(resolve, 2000))
+
+      // Generate mock payment ID
+      const mockPaymentId = `pay_mock_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+      const mockSignature = `sig_mock_${Math.random().toString(36).substring(2, 15)}`
+
+      // Verify payment on server
+      const verifyData = await api.verifyPayment({
+        razorpay_order_id: orderId,
+        razorpay_payment_id: mockPaymentId,
+        razorpay_signature: mockSignature
+      })
+
+      if (verifyData.ok && verifyData.verified) {
+        // Payment verified successfully
+        setProcessing(false)
+        
+        console.log('[PAYMENT] 🧪 MOCK: Payment verified successfully')
+        
+        // Success animation
+        gsap.to(containerRef.current, {
+          scale: 1.05,
+          duration: 0.3,
+          yoyo: true,
+          repeat: 1,
+          ease: "power2.inOut",
+          onComplete: onPaymentSuccess
+        })
+      } else {
+        throw new Error('Payment verification failed')
+      }
     } catch (error) {
       console.error('Payment error:', error)
       setProcessing(false)
-      alert('Failed to initiate payment. Please try again.')
+      alert('Failed to process payment. Please try again.')
     }
   }
 
@@ -230,6 +225,13 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
         </div>
 
         <div ref={cardRef} className="space-y-6">
+          {/* Mock Mode Banner */}
+          {mockMode && (
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg text-sm text-center">
+              🧪 Mock Payment Mode: Payments will be automatically approved for testing
+            </div>
+          )}
+
           {/* User Info Card */}
           <div className="card">
             <h3 className="font-semibold text-gray-900 mb-3">Account Details</h3>
