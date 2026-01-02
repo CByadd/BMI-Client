@@ -236,8 +236,8 @@ function AnalyticsDashboard({ userId }) {
           afterBody: function(context) {
             const index = context[0].dataIndex
             const trend = analytics?.trends?.[index]
-            if (trend?.screenId) {
-              return [`Screen ID: ${trend.screenId.slice(-8)}`]
+            if (trend?.screenName) {
+              return [`Screen: ${trend.screenName}`]
             }
             return []
           },
@@ -564,7 +564,7 @@ function AnalyticsDashboard({ userId }) {
                           <td className="py-3 px-4 text-gray-900">{trend.weight.toFixed(1)}</td>
                           <td className="py-3 px-4">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
-                              {trend.screenName || trend.screenId || 'N/A'}
+                              {trend.screenName || 'N/A'}
                             </span>
                           </td>
                         </tr>
@@ -684,9 +684,9 @@ function AnalyticsDashboard({ userId }) {
             </div>
             <div className="text-center p-4 bg-gray-50 rounded-xl">
               <div className="text-2xl font-bold text-primary-600 mb-2">
-                {analytics.recentBMI.screenId?.slice(-6) || 'N/A'}
+                {analytics.recentBMI.screenName || 'N/A'}
               </div>
-              <div className="text-sm text-gray-600">Screen ID</div>
+              <div className="text-sm text-gray-600">Screen Name</div>
             </div>
           </div>
         </div>
