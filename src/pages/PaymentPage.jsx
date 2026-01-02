@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { gsap } from 'gsap'
+import api from '../lib/api'
 
 function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
   const [processing, setProcessing] = useState(false)
@@ -18,37 +19,22 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
       }
       
       try {
-        // Fetch Razorpay key
-        const keyResponse = await fetch(`${serverBase}/api/payment/key`, {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
-          }
-        })
+        // Update server base if needed
+        if (serverBase) {
+          updateServerBase(serverBase)
+        }
         
-        if (keyResponse.ok) {
-          const keyData = await keyResponse.json()
-          if (keyData.ok && keyData.key_id) {
-            setRazorpayKey(keyData.key_id)
-          }
+        // Fetch Razorpay key
+        const keyData = await api.getPaymentKey()
+        if (keyData.ok && keyData.key_id) {
+          setRazorpayKey(keyData.key_id)
         }
         
         // Fetch payment amount
         if (screenId) {
-          const amountResponse = await fetch(`${serverBase}/api/adscape/player/${screenId}`, {
-            headers: {
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': 'true'
-            }
-          })
-          
-          if (amountResponse.ok) {
-            const data = await amountResponse.json()
-            if (data.ok && data.player && data.player.paymentAmount !== null && data.player.paymentAmount !== undefined) {
-              setPaymentAmount(data.player.paymentAmount)
-            }
+          const data = await api.getPlayer(screenId)
+          if (data.ok && data.player && data.player.paymentAmount !== null && data.player.paymentAmount !== undefined) {
+            setPaymentAmount(data.player.paymentAmount)
           }
         }
       } catch (error) {
@@ -101,41 +87,20 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
       }
 
       // Create Razorpay order
-      const orderResponse = await fetch(`${serverBase}/api/payment/create-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({
-          amount: Number(paymentAmount), // Ensure it's a number
-          currency: 'INR',
-          // Razorpay receipt must be max 40 characters
-          // Format: rcpt + timestamp + first 8 chars of userId (total: ~26 chars)
-          receipt: `rcpt${Date.now()}${(user?.userId || 'user').substring(0, 8)}`,
-          notes: {
-            userId: user?.userId || '',
-            screenId: screenId || '',
-            userName: user?.name || '',
-            userMobile: user?.mobile || ''
-          }
-        })
+      const orderData = await api.createPaymentOrder({
+        amount: Number(paymentAmount), // Ensure it's a number
+        currency: 'INR',
+        // Razorpay receipt must be max 40 characters
+        // Format: rcpt + timestamp + first 8 chars of userId (total: ~26 chars)
+        receipt: `rcpt${Date.now()}${(user?.userId || 'user').substring(0, 8)}`,
+        notes: {
+          userId: user?.userId || '',
+          screenId: screenId || '',
+          userName: user?.name || '',
+          userMobile: user?.mobile || ''
+        }
       })
 
-      if (!orderResponse.ok) {
-        // Try to get error details from response
-        let errorMessage = 'Failed to create payment order'
-        try {
-          const errorData = await orderResponse.json()
-          errorMessage = errorData.details || errorData.message || errorMessage
-          console.error('Payment order error:', errorData)
-        } catch (e) {
-          console.error('Failed to parse error response:', e)
-        }
-        throw new Error(errorMessage)
-      }
-
-      const orderData = await orderResponse.json()
       if (!orderData.ok || !orderData.order) {
         throw new Error('Invalid order response')
       }
@@ -153,20 +118,11 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
         handler: async function (response) {
           try {
             // Verify payment on server
-            const verifyResponse = await fetch(`${serverBase}/api/payment/verify`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'ngrok-skip-browser-warning': 'true'
-              },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature
-              })
+            const verifyData = await api.verifyPayment({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature
             })
-
-            const verifyData = await verifyResponse.json()
 
             if (verifyData.ok && verifyData.verified) {
               // Payment verified successfully

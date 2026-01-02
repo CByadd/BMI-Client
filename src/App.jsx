@@ -8,7 +8,15 @@ import ProgressPage from './pages/ProgressPage'
 import FortunePage from './pages/FortunePage'
 import DashboardPage from './pages/DashboardPage'
 import AnalyticsPage from './pages/AnalyticsPage'
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
+import TermsAndConditionsPage from './pages/TermsAndConditionsPage'
+import RefundPolicyPage from './pages/RefundPolicyPage'
+import ContactUsPage from './pages/ContactUsPage'
+import AboutUsPage from './pages/AboutUsPage'
 import DevPanel from './components/DevPanel'
+import { useApiStore } from './stores/apiStore'
+import { updateBaseURL } from './lib/axios'
+import api from './lib/api'
 
 function useQueryParams() {
   return useMemo(() => new URLSearchParams(window.location.search), [])
@@ -33,12 +41,40 @@ function App() {
 
   // Check if we should show dashboard or analytics directly
   useEffect(() => {
-    if (window.location.pathname === '/dashboard' || window.location.pathname.includes('dashboard')) {
+    const pathname = window.location.pathname.toLowerCase()
+    
+    // Handle static pages
+    if (pathname === '/privacy-policy' || pathname.includes('/privacy-policy')) {
+      setCurrentPage('privacy-policy')
+      setLoading(false)
+      return
+    }
+    if (pathname === '/terms-and-conditions' || pathname.includes('/terms-and-conditions')) {
+      setCurrentPage('terms-and-conditions')
+      setLoading(false)
+      return
+    }
+    if (pathname === '/refund-policy' || pathname.includes('/refund-policy')) {
+      setCurrentPage('refund-policy')
+      setLoading(false)
+      return
+    }
+    if (pathname === '/contact-us' || pathname.includes('/contact-us')) {
+      setCurrentPage('contact-us')
+      setLoading(false)
+      return
+    }
+    if (pathname === '/about-us' || pathname.includes('/about-us')) {
+      setCurrentPage('about-us')
+      setLoading(false)
+      return
+    }
+    if (pathname === '/dashboard' || pathname.includes('dashboard')) {
       setCurrentPage('dashboard')
       setLoading(false)
       return
     }
-    if (window.location.pathname === '/analytics' || window.location.pathname.includes('analytics')) {
+    if (pathname === '/analytics' || pathname.includes('analytics')) {
       setCurrentPage('analytics')
       setLoading(false)
       return
@@ -76,25 +112,17 @@ function App() {
     }
   }, [])
 
-  useEffect(() => {
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-    const fromHash = hash.get('server')
-    const base = fromHash || `${window.location.origin.replace(/\/$/, '')}`.replace(/\/$/, '')
-    setServerBase(base)
-  }, [])
+  const { setServerBase: setStoreServerBase } = useApiStore()
 
   useEffect(() => {
-    // Use the server base from URL hash if available, otherwise use ngrok
+    // Use the server base from URL hash if available, otherwise use default
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
     const fromHash = hash.get('server')
-    if (fromHash) {
-      setServerBase(fromHash)
-    } else {
-      // Updated to point to Server instead of Adscape-Server
-      // TODO: Update this URL to your server deployment URL
-      setServerBase('https://bmi-server-eight.vercel.app') // Change to your server URL
-    }
-  }, [])
+    const base = fromHash || 'https://bmi-server-eight.vercel.app'
+    setServerBase(base)
+    setStoreServerBase(base)
+    updateBaseURL(base)
+  }, [setStoreServerBase])
 
   useEffect(() => {
     async function run() {
@@ -119,40 +147,15 @@ function App() {
       setLoading(true)
       setError('')
       try {
-        const url = `${serverBase}/api/bmi/${encodeURIComponent(bmiId)}`
-        console.log(`[CLIENT] Fetching BMI from: ${url}`)
-        
-        const res = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
-          }
-        })
-        
-        console.log(`[CLIENT] Response status: ${res.status}`)
-        
-        const responseText = await res.text()
-        console.log(`[CLIENT] Raw response:`, responseText.substring(0, 200))
-        
-        if (!res.ok) {
-          console.error(`[CLIENT] Error response:`, responseText)
-          if (res.status === 404) {
-            setError('BMI record not found. Please create a new BMI record.')
-            setCurrentPage('auth')
-            return
-          }
-          throw new Error(`Server error ${res.status}: ${responseText}`)
+        // Update server base if needed
+        if (serverBase) {
+          setStoreServerBase(serverBase)
+          updateBaseURL(serverBase)
         }
         
-        let json
-        try {
-          json = JSON.parse(responseText)
-        } catch (parseError) {
-          console.error(`[CLIENT] JSON parse error:`, parseError)
-          throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`)
-        }
+        console.log(`[CLIENT] Fetching BMI for: ${bmiId}`)
+        
+        const json = await api.getBMI(bmiId)
         
         console.log(`[CLIENT] BMI data received:`, json)
         setData(json)
@@ -164,14 +167,7 @@ function App() {
             const userData = JSON.parse(savedUser)
             if (userData.userId) {
               console.log('[CLIENT] F2 Flow: Auto-linking logged-in user to BMI record')
-              await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
-                method: 'POST',
-                headers: { 
-                  'Content-Type': 'application/json',
-                  'ngrok-skip-browser-warning': 'true'
-                },
-                body: JSON.stringify({ userId: userData.userId })
-              });
+              await api.linkUserToBMI(bmiId, userData.userId)
               console.log('[CLIENT] F2 Flow: Successfully auto-linked user to BMI record');
               
               // Update the data with user info
@@ -202,10 +198,14 @@ function App() {
           // Regular web users: show login/payment flow
           setCurrentPage('auth')
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('[CLIENT] Fetch error:', e)
-        setError(e.message)
-        if (e.message.includes('Invalid JSON') || e.message.includes('Unexpected token')) {
+        const errorMessage = e.message || 'Failed to fetch BMI data'
+        setError(errorMessage)
+        if (e.status === 404 || errorMessage.includes('not found')) {
+          setError('BMI record not found. Please create a new BMI record.')
+          setCurrentPage('auth')
+        } else if (errorMessage.includes('Invalid JSON') || errorMessage.includes('Unexpected token')) {
           setError('Server returned invalid response. Please create a new BMI record.')
           setCurrentPage('auth')
         }
@@ -224,17 +224,7 @@ function App() {
       
       if (!userData.userId) {
         // Legacy flow: Create user via API
-        const res = await fetch(`${serverBase}/api/user`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
-          },
-          body: JSON.stringify({ name: userData.name, mobile: userData.mobile })
-        });
-        const userResponse = await res.json();
-        if (!res.ok) throw new Error(userResponse.error || 'Failed to create user');
-        
+        const userResponse = await api.createUser(userData.name, userData.mobile);
         console.log('[AUTH] User created successfully:', userResponse);
         finalUserData = { ...userData, userId: userResponse.userId };
       } else {
@@ -251,14 +241,7 @@ function App() {
       if (isQRCodeVisit && bmiId && finalUserData.userId && fromPlayerAppF2) {
         try {
           console.log('[AUTH] F2 Flow: Linking user to BMI record immediately:', bmiId);
-          await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': 'true'
-            },
-            body: JSON.stringify({ userId: finalUserData.userId })
-          });
+          await api.linkUserToBMI(bmiId, finalUserData.userId);
           console.log('[AUTH] F2 Flow: Successfully linked user to BMI record');
         } catch (linkError) {
           console.error('[AUTH] F2 Flow: Error linking user to BMI:', linkError);
@@ -290,14 +273,7 @@ function App() {
       if (isQRCodeVisit && bmiId && userData.userId && fromPlayerAppF2) {
         try {
           console.log('[AUTH] Fallback F2: Linking user to BMI record:', bmiId);
-          await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': 'true'
-            },
-            body: JSON.stringify({ userId: userData.userId })
-          });
+          await api.linkUserToBMI(bmiId, userData.userId);
           console.log('[AUTH] Fallback F2: Successfully linked user to BMI record');
         } catch (linkError) {
           console.error('[AUTH] Fallback F2: Error linking user to BMI:', linkError);
@@ -322,14 +298,7 @@ function App() {
     if (fromPlayerAppF1 && bmiId && user?.userId) {
       try {
         console.log('[PAYMENT] F1 Flow: Linking user to BMI record after payment:', bmiId);
-        await fetch(`${serverBase}/api/bmi/${bmiId}/link-user`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
-          },
-          body: JSON.stringify({ userId: user.userId })
-        });
+        await api.linkUserToBMI(bmiId, user.userId);
         console.log('[PAYMENT] F1 Flow: Successfully linked user to BMI record');
       } catch (linkError) {
         console.error('[PAYMENT] F1 Flow: Error linking user to BMI:', linkError);
@@ -337,18 +306,7 @@ function App() {
       }
     }
     
-    try {
-      await fetch(`${serverBase}/api/payment-success`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({ userId: user?.userId, bmiId, appVersion })
-      });
-    } catch (e) {
-      console.error('Payment success notification error:', e);
-    }
+    await api.notifyPaymentSuccess(user?.userId, bmiId, appVersion);
     
     setTimeout(() => {
       setCurrentPage('bmi-result');
@@ -357,14 +315,7 @@ function App() {
         startProgressAnimation();
         
         // Notify server to emit progress-start to Android
-        fetch(`${serverBase}/api/progress-start`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
-          },
-          body: JSON.stringify({ bmiId })
-        }).catch(e => console.error('Progress start notification error:', e));
+        api.notifyProgressStart(bmiId);
       }, 5000);
     }, 5000);
   }
@@ -392,14 +343,7 @@ function App() {
         setCurrentPage('fortune');
         
         // Notify server to emit fortune-ready to Android
-        fetch(`${serverBase}/api/fortune-generate`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
-          },
-          body: JSON.stringify({ bmiId, appVersion })
-        }).catch(e => console.error('Fortune notification error:', e));
+        api.notifyFortuneGenerate(bmiId, appVersion).catch(e => console.error('Fortune notification error:', e));
         
         setTimeout(() => {
           setCurrentPage('dashboard');
@@ -409,16 +353,7 @@ function App() {
       
       // Fallback: generate fortune if not in database (for backward compatibility)
       console.log('[FORTUNE] No fortune in database, generating new one');
-      const response = await fetch(`${serverBase}/api/fortune-generate`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({ bmiId, appVersion })
-      });
-      
-      const result = await response.json();
+      const result = await api.notifyFortuneGenerate(bmiId, appVersion);
       if (result.ok) {
         setFortuneMessage(result.fortuneMessage);
         setCurrentPage('fortune');
@@ -469,6 +404,16 @@ function App() {
 
   const currentPageComponent = (() => {
     switch (currentPage) {
+      case 'privacy-policy':
+        return <PrivacyPolicyPage />
+      case 'terms-and-conditions':
+        return <TermsAndConditionsPage />
+      case 'refund-policy':
+        return <RefundPolicyPage />
+      case 'contact-us':
+        return <ContactUsPage />
+      case 'about-us':
+        return <AboutUsPage />
       case 'auth':
         return <AuthPage {...pageProps} />
       case 'payment':
@@ -490,10 +435,12 @@ function App() {
     }
   })()
 
+  const isStaticPage = ['privacy-policy', 'terms-and-conditions', 'refund-policy', 'contact-us', 'about-us'].includes(currentPage)
+
   return (
     <>
       {currentPageComponent}
-      <DevPanel />
+      {!isStaticPage && <DevPanel />}
     </>
   )
 }

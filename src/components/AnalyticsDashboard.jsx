@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
+import api from '../lib/api'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -49,32 +50,13 @@ function AnalyticsDashboard({ userId }) {
   const fetchAnalytics = async () => {
     try {
       setLoading(true)
-      const hashParams = window.location.hash.split('server=')[1]
-      const apiBase = 'https://bmi-server-eight.vercel.app'
-      console.log('[ANALYTICS] Fetching from:', `${apiBase}/api/user/${userId}/analytics`)
-      console.log('[ANALYTICS] Hash:', window.location.hash)
-      const response = await fetch(`${apiBase}/api/user/${userId}/analytics`)
-      
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('[ANALYTICS] Response not ok:', response.status, errorText)
-        throw new Error(`Failed to fetch analytics: ${response.status} - ${errorText.substring(0, 100)}`)
-      }
-      
-      const responseText = await response.text()
-      console.log('[ANALYTICS] Response text:', responseText.substring(0, 200))
-      
-      try {
-        const data = JSON.parse(responseText)
-        setAnalytics(data)
-      } catch (parseError) {
-        console.error('[ANALYTICS] JSON parse error:', parseError)
-        console.error('[ANALYTICS] Response was:', responseText.substring(0, 500))
-        throw new Error(`Invalid JSON response: ${parseError.message}`)
-      }
-    } catch (err) {
+      console.log('[ANALYTICS] Fetching analytics for user:', userId)
+      const data = await api.getUserAnalytics(userId)
+      console.log('[ANALYTICS] Analytics data received:', data)
+      setAnalytics(data)
+    } catch (err: any) {
       console.error('Analytics fetch error:', err)
-      setError(err.message)
+      setError(err.message || 'Failed to fetch analytics')
     } finally {
       setLoading(false)
     }

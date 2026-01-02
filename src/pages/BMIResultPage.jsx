@@ -191,63 +191,65 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
           </div>
         </div>
 
-        {/* Recommendations Section */}
+        {/* Combined Recommendations Section */}
         {(weightRecommendation || waterRecommendation) && (
-          <div className="space-y-6 mb-8">
-            {/* Weight Recommendation */}
-            {weightRecommendation && data?.height && (
-              <div className="card bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200">
-                <div className="flex items-start">
-                  <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Weight Recommendation</h3>
-                    <p className="text-gray-700 mb-3">
-                      For your height of <span className="font-semibold">{data.height} cm</span>, the recommended weight range for a healthy BMI (18.5-24.9) is:
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="inline-flex items-center space-x-2 bg-white rounded-lg px-4 py-2 border-2 border-green-300">
-                        <span className="text-2xl font-bold text-green-600">{weightRecommendation.min} - {weightRecommendation.max} kg</span>
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        Ideal: <span className="font-semibold">{weightRecommendation.ideal} kg</span>
+          <div className="card bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 border-2 border-purple-200 mb-8">
+            <div className="space-y-6">
+              {/* Weight Recommendation */}
+              {weightRecommendation && data?.height && (
+                <div className="border-b border-purple-200 pb-6 last:border-b-0 last:pb-0">
+                  <div className="flex items-start">
+                    <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">Weight Recommendation</h3>
+                      <p className="text-gray-700 mb-3">
+                        For your height of <span className="font-semibold">{data.height} cm</span>, the recommended weight range for a healthy BMI (18.5-24.9) is:
+                      </p>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="inline-flex items-center space-x-2 bg-white rounded-lg px-4 py-2 border-2 border-green-300">
+                          <span className="text-2xl font-bold text-green-600">{weightRecommendation.min} - {weightRecommendation.max} kg</span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Ideal: <span className="font-semibold">{weightRecommendation.ideal} kg</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Water Consumption Recommendation */}
-            {waterRecommendation && data?.height && (
-              <div className="card bg-gradient-to-r from-cyan-50 to-blue-50 border-2 border-cyan-200">
-                <div className="flex items-start">
-                  <div className="w-12 h-12 bg-cyan-500 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Water Intake Recommendation</h3>
-                    <p className="text-gray-700 mb-3">
-                      Based on your height of <span className="font-semibold">{data.height} cm</span>, the recommended daily water intake is:
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="inline-flex items-center space-x-2 bg-white rounded-lg px-4 py-2 border-2 border-cyan-300">
-                        <span className="text-2xl font-bold text-cyan-600">{waterRecommendation.liters} L</span>
-                        <span className="text-sm text-gray-600">({waterRecommendation.ml} ml)</span>
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        ≈ {waterRecommendation.cups} cups (250ml each)
+              {/* Water Consumption Recommendation */}
+              {waterRecommendation && data?.height && (
+                <div>
+                  <div className="flex items-start">
+                    <div className="w-12 h-12 bg-cyan-500 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">Water Intake Recommendation</h3>
+                      <p className="text-gray-700 mb-3">
+                        Based on your height of <span className="font-semibold">{data.height} cm</span>, the recommended daily water intake is:
+                      </p>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="inline-flex items-center space-x-2 bg-white rounded-lg px-4 py-2 border-2 border-cyan-300">
+                          <span className="text-2xl font-bold text-cyan-600">{waterRecommendation.liters} L</span>
+                          <span className="text-sm text-gray-600">({waterRecommendation.ml} ml)</span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          ≈ {waterRecommendation.cups} cups (250ml each)
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 

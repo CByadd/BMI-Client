@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
+import api, { updateServerBase } from '../lib/api'
 
 function AnalyzingPage({ onNavigate, screenId, serverBase, socketRef, token }) {
   const containerRef = useRef(null)
@@ -38,14 +39,7 @@ function AnalyzingPage({ onNavigate, screenId, serverBase, socketRef, token }) {
       const claimSession = async () => {
         try {
           if (!token || !serverBase) return
-          await fetch(`${serverBase}/api/session/claim`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': 'true',
-              'x-bmi-token': token
-            }
-          })
+          await api.claimSession(token)
         } catch (_) {}
       }
       claimSession()
@@ -59,28 +53,9 @@ function AnalyzingPage({ onNavigate, screenId, serverBase, socketRef, token }) {
         
         while (attempts < maxAttempts && waitingForAndroid) {
           try {
-            const res = await fetch(`${serverBase}/api/session/status`, {
-              headers: { 
-                'ngrok-skip-browser-warning': 'true',
-                'x-bmi-token': token
-              }
-            })
-
-            // If token is gone or server error, treat as expired
-            if (!res.ok) {
-              console.log('[ANALYZING] ⚠️ Token status request failed with status:', res.status)
-              setTokenExpired(true)
-              setWaitingForAndroid(false)
-              // Inform Android that this token/session has expired
-              if (socketRef?.current && screenId && token) {
-                socketRef.current.emit('token-expired', { screenId, token })
-              }
-              break
-            }
-
-            const data = await res.json()
+            const data = await api.getSessionStatus(token)
             
-            if (data.ok) {
+            if (data && data.ok) {
               console.log('[ANALYZING] Token status:', data.token.state)
               const state = data.token.state
               const expired = data.token.isExpired || data.token.isUnusedTimeout
@@ -101,8 +76,19 @@ function AnalyzingPage({ onNavigate, screenId, serverBase, socketRef, token }) {
                 break
               }
             }
-          } catch (e) {
+          } catch (e: any) {
             console.error('[ANALYZING] Error checking token:', e)
+            // If token is gone or server error, treat as expired
+            if (e.status && e.status >= 400) {
+              console.log('[ANALYZING] ⚠️ Token status request failed with status:', e.status)
+              setTokenExpired(true)
+              setWaitingForAndroid(false)
+              // Inform Android that this token/session has expired
+              if (socketRef?.current && screenId && token) {
+                socketRef.current.emit('token-expired', { screenId, token })
+              }
+              break
+            }
           }
           
           attempts++

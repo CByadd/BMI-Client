@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { gsap } from 'gsap'
 import ScreenLogo from '../components/ScreenLogo'
+import api from '../lib/api'
+import { updateServerBase } from '../lib/api'
 
 function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
   const [name, setName] = useState('')
@@ -78,18 +80,14 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
 
     setLoading(true)
     try {
-      const response = await fetch(`${serverBase}/api/otp/generate`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({ mobile: cleanMobileNumber })
-      })
+      // Update server base if needed
+      if (serverBase) {
+        updateServerBase(serverBase)
+      }
+      
+      const data = await api.generateOTP(cleanMobileNumber)
 
-      const data = await response.json()
-
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error || 'Failed to send OTP')
       }
 
@@ -97,7 +95,7 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
       setStep('otp')
       setCountdown(60) // 60 second countdown
       setMobile(cleanMobileNumber) // Update with cleaned mobile
-    } catch (err) {
+    } catch (err: any) {
       console.error('Send OTP error:', err)
       setError(err.message || 'Failed to send OTP. Please try again.')
     } finally {
@@ -117,22 +115,14 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
     setLoading(true)
     try {
       const cleanMobileNumber = cleanMobile(mobile)
-      const response = await fetch(`${serverBase}/api/otp/verify`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true'
-        },
-        body: JSON.stringify({ 
-          mobile: cleanMobileNumber,
-          otp: otp,
-          name: name.trim() || undefined // Include name if provided (for signup)
-        })
-      })
+      // Update server base if needed
+      if (serverBase) {
+        updateServerBase(serverBase)
+      }
+      
+      const data = await api.verifyOTP(cleanMobileNumber, otp, name.trim() || undefined)
 
-      const data = await response.json()
-
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         // Check if user needs to provide name (new user registration)
         if (data.error && data.error.includes('name')) {
           setStep('name')

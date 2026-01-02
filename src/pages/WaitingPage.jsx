@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
+import api, { updateServerBase } from '../lib/api'
 
 function WaitingPage({ onNavigate, data, appVersion, screenId, serverBase, socketRef }) {
   const containerRef = useRef(null)
@@ -13,10 +14,11 @@ function WaitingPage({ onNavigate, data, appVersion, screenId, serverBase, socke
     
     try {
       console.log('[WAITING] [SYNC] Checking if Android app is ready for screenId:', screenId)
-      const response = await fetch(`${serverBase}/api/debug/connections`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      })
-      const result = await response.json()
+      // Update server base if needed
+      if (serverBase) {
+        updateServerBase(serverBase)
+      }
+      const result = await api.getDebugConnections()
       const roomName = `screen:${screenId}`
       const room = result.rooms?.find(r => r.room === roomName)
       const androidConnected = room && room.size > 0

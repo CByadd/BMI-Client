@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import api from '../lib/api'
+import { useApiStore } from '../stores/apiStore'
 
 function ScreenLogo({ screenId, serverBase, className = '' }) {
   const [logoUrl, setLogoUrl] = useState(null)
@@ -25,29 +27,26 @@ function ScreenLogo({ screenId, serverBase, className = '' }) {
 
     const fetchLogo = async () => {
       try {
-        const response = await fetch(`${serverBase}/api/adscape/player/${screenId}/logo`, {
-          headers: {
-            'Accept': 'application/json',
-            'ngrok-skip-browser-warning': 'true'
-          }
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          if (data.ok && data.logoUrl) {
-            setLogoUrl(data.logoUrl)
-            console.log('[ScreenLogo] Logo loaded successfully:', data.logoUrl)
-          } else {
-            console.log('[ScreenLogo] No logo URL in response:', data)
-          }
-        } else if (response.status === 404) {
+        // Update server base if needed
+        if (serverBase) {
+          useApiStore.getState().setServerBase(serverBase)
+        }
+        
+        // Note: The API endpoint returns JSON with logoUrl, not a blob
+        const response = await api.getPlayer(screenId)
+        
+        if (response.ok && response.player && response.player.logoUrl) {
+          setLogoUrl(response.player.logoUrl)
+          console.log('[ScreenLogo] Logo loaded successfully:', response.player.logoUrl)
+        } else {
+          console.log('[ScreenLogo] No logo URL in response')
+        }
+      } catch (error: any) {
+        if (error.status === 404) {
           console.log('[ScreenLogo] No logo found for screen:', screenId)
         } else {
-          const errorData = await response.json().catch(() => ({}))
-          console.error('[ScreenLogo] Failed to fetch logo:', response.status, response.statusText, errorData)
+          console.error('[ScreenLogo] Error fetching logo:', error)
         }
-      } catch (error) {
-        console.error('[ScreenLogo] Error fetching logo:', error)
       } finally {
         setLoading(false)
       }
