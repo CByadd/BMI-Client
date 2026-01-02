@@ -14,6 +14,7 @@ import RefundPolicyPage from './pages/RefundPolicyPage'
 import ContactUsPage from './pages/ContactUsPage'
 import AboutUsPage from './pages/AboutUsPage'
 import DevPanel from './components/DevPanel'
+import Footer from './components/Footer'
 import { useApiStore } from './stores/apiStore'
 import { updateBaseURL } from './lib/axios'
 import api from './lib/api'
@@ -198,9 +199,9 @@ function App() {
           // Regular web users: show login/payment flow
           setCurrentPage('auth')
         }
-      } catch (e: any) {
+      } catch (e) {
         console.error('[CLIENT] Fetch error:', e)
-        const errorMessage = e.message || 'Failed to fetch BMI data'
+        const errorMessage = e?.message || 'Failed to fetch BMI data'
         setError(errorMessage)
         if (e.status === 404 || errorMessage.includes('not found')) {
           setError('BMI record not found. Please create a new BMI record.')
@@ -436,12 +437,19 @@ function App() {
   })()
 
   const isStaticPage = ['privacy-policy', 'terms-and-conditions', 'refund-policy', 'contact-us', 'about-us'].includes(currentPage)
+  
+  // Pages that should not show footer (full-screen experiences)
+  const hideFooterPages = ['loading', 'waiting', 'progress', 'bmi-result', 'fortune']
+  const showFooter = !hideFooterPages.includes(currentPage)
 
   return (
-    <>
-      {currentPageComponent}
+    <div className="flex flex-col min-h-screen">
+      <div className="flex-grow">
+        {currentPageComponent}
+      </div>
+      {showFooter && <Footer />}
       {!isStaticPage && <DevPanel />}
-    </>
+    </div>
   )
 }
 

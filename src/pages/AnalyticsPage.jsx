@@ -153,15 +153,6 @@ function AnalyticsPage() {
           </div>
         )}
       </div>
-
-      {/* Footer */}
-      <div className="bg-white/50 backdrop-blur-sm border-t border-gray-200 mt-16">
-        <div className="max-w-7xl mx-auto px-4 py-8 text-center">
-          <p className="text-gray-600">
-            © 2025 BMI Pro. Empowering healthier lives through intelligent analysis.
-          </p>
-        </div>
-      </div>
     </div>
   )
 }
