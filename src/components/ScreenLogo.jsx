@@ -41,8 +41,8 @@ function ScreenLogo({ screenId, serverBase, className = '' }) {
         } else {
           console.log('[ScreenLogo] No logo URL in response')
         }
-      } catch (error: any) {
-        if (error.status === 404) {
+      } catch (error) {
+        if (error?.status === 404) {
           console.log('[ScreenLogo] No logo found for screen:', screenId)
         } else {
           console.error('[ScreenLogo] Error fetching logo:', error)

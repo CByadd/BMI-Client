@@ -16,8 +16,10 @@ import AboutUsPage from './pages/AboutUsPage'
 import DevPanel from './components/DevPanel'
 import Footer from './components/Footer'
 import { useApiStore } from './stores/apiStore'
+import { useUserSessionStore } from './stores/userSessionStore'
 import { updateBaseURL } from './lib/axios'
 import api from './lib/api'
+import { getUserFromStorage, isSessionValidSync } from './utils/sessionHelper'
 
 function useQueryParams() {
   return useMemo(() => new URLSearchParams(window.location.search), [])
@@ -35,16 +37,42 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [data, setData] = useState(null)
-  const [user, setUser] = useState(null)
+  
+  // Initialize user from localStorage IMMEDIATELY (synchronous, before any effects)
+  const initialUser = getUserFromStorage()
+  const [user, setUser] = useState(initialUser)
+  
   const [currentPage, setCurrentPage] = useState('loading')
   const [progressValue, setProgressValue] = useState(0)
   const [fortuneMessage, setFortuneMessage] = useState('')
 
-  // Check if we should show dashboard or analytics directly
+  // Get session store methods
+  const { setUser: setSessionUser } = useUserSessionStore()
+
+  // Log initial user load
+  useEffect(() => {
+    if (initialUser) {
+      console.log('[CLIENT] User loaded from localStorage on mount:', initialUser.userId)
+    } else {
+      console.log('[CLIENT] No user found in localStorage on mount')
+    }
+  }, []) // Only run once on mount
+
+  // Sync user to Zustand store when it changes
+  useEffect(() => {
+    if (user && user.userId) {
+      setSessionUser(user)
+    }
+  }, [user, setSessionUser])
+
+  // Load saved user and handle routing - SIMPLE VERSION
   useEffect(() => {
     const pathname = window.location.pathname.toLowerCase()
     
-    // Handle static pages
+    // Use the user state that was initialized from localStorage
+    const loadedUser = user
+    
+    // Handle static pages (no auth required)
     if (pathname === '/privacy-policy' || pathname.includes('/privacy-policy')) {
       setCurrentPage('privacy-policy')
       setLoading(false)
@@ -70,48 +98,49 @@ function App() {
       setLoading(false)
       return
     }
+    
+    // Check session validity for protected pages (dashboard/analytics)
     if (pathname === '/dashboard' || pathname.includes('dashboard')) {
-      setCurrentPage('dashboard')
-      setLoading(false)
-      return
-    }
-    if (pathname === '/analytics' || pathname.includes('analytics')) {
-      setCurrentPage('analytics')
+      if (loadedUser && loadedUser.userId) {
+        console.log('[CLIENT] Dashboard access with valid session')
+        setCurrentPage('dashboard')
+        setLoading(false)
+        return
+      }
+      console.log('[CLIENT] No valid session for dashboard, redirecting to auth')
+      setCurrentPage('auth')
       setLoading(false)
       return
     }
     
-    // Check if user is visiting directly (not via QR code) and has saved login
+    if (pathname === '/analytics' || pathname.includes('analytics')) {
+      if (loadedUser && loadedUser.userId) {
+        console.log('[CLIENT] Analytics access with valid session')
+        setCurrentPage('analytics')
+        setLoading(false)
+        return
+      }
+      console.log('[CLIENT] No valid session for analytics, redirecting to auth')
+      setCurrentPage('auth')
+      setLoading(false)
+      return
+    }
+    
+    // Check if user is visiting directly (not via QR code) and has valid session
     const isDirectVisit = !bmiId && !screenId // No QR code parameters
     if (isDirectVisit) {
-      const savedUser = localStorage.getItem('bmi_user')
-      if (savedUser) {
-        try {
-          const userData = JSON.parse(savedUser)
-          if (userData.userId) {
-            console.log('[CLIENT] Direct visit with saved user, showing dashboard')
-            setUser(userData)
-            setCurrentPage('dashboard')
-            setLoading(false)
-            return
-          }
-        } catch (e) {
-          console.error('[CLIENT] Error parsing saved user:', e)
-          localStorage.removeItem('bmi_user') // Clean up corrupted data
-        }
+      if (loadedUser && loadedUser.userId) {
+        console.log('[CLIENT] Direct visit with valid session, auto-logging in')
+        setCurrentPage('dashboard')
+        setLoading(false)
+        return
+      } else {
+        console.log('[CLIENT] Session expired or invalid, showing auth page')
+        setCurrentPage('auth')
+        setLoading(false)
       }
     }
-  }, [bmiId, screenId])
-
-  // Load saved user
-  useEffect(() => {
-    const saved = localStorage.getItem('bmi_user')
-    if (saved) {
-      try {
-        setUser(JSON.parse(saved))
-      } catch {}
-    }
-  }, [])
+  }, [bmiId, screenId, user])
 
   const { setServerBase: setStoreServerBase } = useApiStore()
 
@@ -125,6 +154,16 @@ function App() {
     updateBaseURL(base)
   }, [setStoreServerBase])
 
+  // Protect dashboard and analytics pages - redirect to auth if no valid session
+  useEffect(() => {
+    if (currentPage === 'dashboard' || currentPage === 'analytics') {
+      if (!isSessionValidSync() || !user || !user.userId) {
+        console.log('[CLIENT] Protected page accessed without valid session, redirecting to auth')
+        setCurrentPage('auth')
+      }
+    }
+  }, [currentPage, user])
+
   useEffect(() => {
     async function run() {
       if (currentPage === 'dashboard' || currentPage === 'analytics') return
@@ -133,11 +172,17 @@ function App() {
       const isQRCodeVisit = !!(screenId && bmiId)
       
       if (!isQRCodeVisit) {
-        // Direct visit without QR code parameters
-        console.log(`[CLIENT] Direct visit - no QR code parameters`)
-        setCurrentPage('auth')
-        setLoading(false)
-        return
+        // Direct visit without QR code parameters - check if user is logged in
+        if (user && user.userId && isSessionValidSync()) {
+          console.log(`[CLIENT] Direct visit with logged in user, staying on current page`)
+          setLoading(false)
+          return
+        } else {
+          console.log(`[CLIENT] Direct visit - no QR code parameters and no user, showing auth`)
+          setCurrentPage('auth')
+          setLoading(false)
+          return
+        }
       }
       
       if (!serverBase || !bmiId) {
@@ -162,20 +207,17 @@ function App() {
         setData(json)
         
         // If user is already logged in and BMI record has no user, link them (F2 only)
-        const savedUser = localStorage.getItem('bmi_user')
-        if (savedUser && !json.userId && fromPlayerAppF2) {
+        const currentSessionUser = useUserSessionStore.getState().user
+        if (currentSessionUser && currentSessionUser.userId && !json.userId && fromPlayerAppF2) {
           try {
-            const userData = JSON.parse(savedUser)
-            if (userData.userId) {
-              console.log('[CLIENT] F2 Flow: Auto-linking logged-in user to BMI record')
-              await api.linkUserToBMI(bmiId, userData.userId)
-              console.log('[CLIENT] F2 Flow: Successfully auto-linked user to BMI record');
-              
-              // Update the data with user info
-              json.userId = userData.userId;
-              json.user = userData;
-              setData(json);
-            }
+            console.log('[CLIENT] F2 Flow: Auto-linking logged-in user to BMI record')
+            await api.linkUserToBMI(bmiId, currentSessionUser.userId)
+            console.log('[CLIENT] F2 Flow: Successfully auto-linked user to BMI record');
+            
+            // Update the data with user info
+            json.userId = currentSessionUser.userId;
+            json.user = currentSessionUser;
+            setData(json);
           } catch (linkError) {
             console.error('[CLIENT] F2 Flow: Error auto-linking user:', linkError);
           }
@@ -233,7 +275,8 @@ function App() {
       }
       
       setUser(finalUserData);
-      localStorage.setItem('bmi_user', JSON.stringify(finalUserData));
+      // Save with 8-day session expiry using Zustand store
+      setSessionUser(finalUserData);
       
       // Check if this is a QR code visit or direct visit
       const isQRCodeVisit = !!(screenId && bmiId)
@@ -267,7 +310,8 @@ function App() {
     } catch (e) {
       console.error('[AUTH] Auth error:', e);
       setUser(userData);
-      localStorage.setItem('bmi_user', JSON.stringify(userData));
+      // Save with 8-day session expiry even in error fallback using Zustand store
+      setSessionUser(userData);
       
       // Try to link user even in fallback (only for F2 flow)
       const isQRCodeVisit = !!(screenId && bmiId)

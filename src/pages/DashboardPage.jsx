@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { gsap } from 'gsap'
 import AnalyticsDashboard from '../components/AnalyticsDashboard'
+import UserMenu from '../components/UserMenu'
+import { useUserSessionStore } from '../stores/userSessionStore'
 
 function DashboardPage({ user, data, serverBase }) {
+  const { clearUser } = useUserSessionStore()
   const containerRef = useRef(null)
   const cardsRef = useRef(null)
   const headerRef = useRef(null)
@@ -45,7 +48,7 @@ function DashboardPage({ user, data, serverBase }) {
   // BMI creation removed - client is read-only for analytics
 
   const handleLogout = () => {
-    localStorage.removeItem('bmi_user')
+    clearUser()
     window.location.href = '/'
   }
 
@@ -66,14 +69,7 @@ function DashboardPage({ user, data, serverBase }) {
             </div>
             
             <div className="flex items-center space-x-3">
-              {user && (
-                <button 
-                  onClick={handleLogout}
-                  className="btn-secondary text-sm"
-                >
-                  Logout
-                </button>
-              )}
+              {user && <UserMenu user={user} onLogout={handleLogout} />}
             </div>
           </div>
         </div>

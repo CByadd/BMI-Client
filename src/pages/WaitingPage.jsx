@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
-import api, { updateServerBase } from '../lib/api'
+import api from '../lib/api'
+import { updateBaseURL } from '../lib/axios'
+import { useApiStore } from '../stores/apiStore'
 
 function WaitingPage({ onNavigate, data, appVersion, screenId, serverBase, socketRef }) {
   const containerRef = useRef(null)
@@ -16,7 +18,8 @@ function WaitingPage({ onNavigate, data, appVersion, screenId, serverBase, socke
       console.log('[WAITING] [SYNC] Checking if Android app is ready for screenId:', screenId)
       // Update server base if needed
       if (serverBase) {
-        updateServerBase(serverBase)
+        useApiStore.getState().setServerBase(serverBase)
+        updateBaseURL(serverBase)
       }
       const result = await api.getDebugConnections()
       const roomName = `screen:${screenId}`

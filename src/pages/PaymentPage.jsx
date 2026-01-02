@@ -1,8 +1,14 @@
 import { useEffect, useState, useRef } from 'react'
 import { gsap } from 'gsap'
 import api from '../lib/api'
+import { updateBaseURL } from '../lib/axios'
+import { useApiStore } from '../stores/apiStore'
+import UserMenu from '../components/UserMenu'
+import ScreenLogo from '../components/ScreenLogo'
+import { useUserSessionStore } from '../stores/userSessionStore'
 
 function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
+  const { clearUser } = useUserSessionStore()
   const [processing, setProcessing] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState(9) // Default amount
   const [loadingAmount, setLoadingAmount] = useState(true)
@@ -21,7 +27,8 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
       try {
         // Update server base if needed
         if (serverBase) {
-          updateServerBase(serverBase)
+          useApiStore.getState().setServerBase(serverBase)
+          updateBaseURL(serverBase)
         }
         
         // Fetch Razorpay key
@@ -181,9 +188,36 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
     }
   }
 
+  const handleLogout = () => {
+    clearUser()
+    window.location.href = '/'
+  }
+
   return (
-    <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
-      <div ref={containerRef} className="w-full max-w-md">
+    <div className="min-h-screen gradient-bg">
+      {/* Header */}
+      <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="bg-primary-600 rounded-xl flex items-center justify-center">
+                <img 
+                  src="https://res.cloudinary.com/dvmuf6jfj/image/upload/v1759391612/Well2Day/imgi_1_Group_2325_f1mz13.png" 
+                  alt="Well2Day Logo" 
+                  className="h-8 w-auto"
+                />
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              {user && <UserMenu user={user} onLogout={handleLogout} />}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex items-center justify-center p-4 min-h-[calc(100vh-80px)]">
+        <div ref={containerRef} className="w-full max-w-md">
         <ScreenLogo screenId={screenId} serverBase={serverBase} />
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-2xl mb-4">
@@ -272,6 +306,7 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
             </svg>
             <span>Secured by 256-bit SSL encryption</span>
           </div>
+        </div>
         </div>
       </div>
     </div>

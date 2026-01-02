@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
-import api, { updateServerBase } from '../lib/api'
+import api from '../lib/api'
+import { updateBaseURL } from '../lib/axios'
+import { useApiStore } from '../stores/apiStore'
 
 function AnalyzingPage({ onNavigate, screenId, serverBase, socketRef, token }) {
   const containerRef = useRef(null)
@@ -76,10 +78,10 @@ function AnalyzingPage({ onNavigate, screenId, serverBase, socketRef, token }) {
                 break
               }
             }
-          } catch (e: any) {
+          } catch (e) {
             console.error('[ANALYZING] Error checking token:', e)
             // If token is gone or server error, treat as expired
-            if (e.status && e.status >= 400) {
+            if (e?.status && e.status >= 400) {
               console.log('[ANALYZING] ⚠️ Token status request failed with status:', e.status)
               setTokenExpired(true)
               setWaitingForAndroid(false)

@@ -54,9 +54,9 @@ function AnalyticsDashboard({ userId }) {
       const data = await api.getUserAnalytics(userId)
       console.log('[ANALYTICS] Analytics data received:', data)
       setAnalytics(data)
-    } catch (err: any) {
+    } catch (err) {
       console.error('Analytics fetch error:', err)
-      setError(err.message || 'Failed to fetch analytics')
+      setError(err?.message || 'Failed to fetch analytics')
     } finally {
       setLoading(false)
     }

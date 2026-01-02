@@ -2,12 +2,14 @@ import { useEffect, useState, useRef } from 'react'
 import { gsap } from 'gsap'
 import ScreenLogo from '../components/ScreenLogo'
 import api from '../lib/api'
-import { updateServerBase } from '../lib/api'
+import { updateBaseURL } from '../lib/axios'
+import { useApiStore } from '../stores/apiStore'
+import { useUserSessionStore } from '../stores/userSessionStore'
 
 function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
   const [name, setName] = useState('')
   const [mobile, setMobile] = useState('')
-  const [otp, setOtp] = useState('')
+  // const [otp, setOtp] = useState('')
   const [step, setStep] = useState('mobile') // 'mobile' | 'otp' | 'name'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -15,17 +17,19 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
   const [isSignup, setIsSignup] = useState(false)
   const containerRef = useRef(null)
   const formRef = useRef(null)
-  const otpInputRef = useRef(null)
+  const OTP_LENGTH = 6
+  const [otp, setOtp] = useState(Array(OTP_LENGTH).fill(''))
+  const otpRefs = useRef([])
+
+
+  const { user: sessionUser } = useUserSessionStore()
 
   useEffect(() => {
-    const saved = localStorage.getItem('bmi_user')
-    if (saved) {
-      try {
-        const userData = JSON.parse(saved)
-        setName(userData.name || '')
-        setMobile(userData.mobile || '')
-        setIsSignup(false)
-      } catch {}
+    // Load saved user data from session store
+    if (sessionUser) {
+      setName(sessionUser.name || '')
+      setMobile(sessionUser.mobile || '')
+      setIsSignup(false)
     }
     
     // For direct visits, just show login form
@@ -33,7 +37,7 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
     if (isDirectVisit) {
       setIsSignup(false) // Default to login for existing users
     }
-  }, [screenId, bmiId])
+  }, [screenId, bmiId, sessionUser])
 
   useEffect(() => {
     if (containerRef.current && formRef.current) {
@@ -57,10 +61,10 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
     }
   }, [countdown])
 
-  // Focus OTP input when step changes to OTP
+  // Focus first OTP input when step changes to OTP
   useEffect(() => {
-    if (step === 'otp' && otpInputRef.current) {
-      setTimeout(() => otpInputRef.current?.focus(), 300)
+    if (step === 'otp' && otpRefs.current[0]) {
+      setTimeout(() => otpRefs.current[0]?.focus(), 300)
     }
   }, [step])
 
@@ -71,7 +75,7 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
   const handleSendOTP = async (e) => {
     e?.preventDefault()
     setError('')
-    
+
     const cleanMobileNumber = cleanMobile(mobile)
     if (cleanMobileNumber.length !== 10) {
       setError('Please enter a valid 10-digit mobile number')
@@ -82,22 +86,31 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
     try {
       // Update server base if needed
       if (serverBase) {
-        updateServerBase(serverBase)
+        useApiStore.getState().setServerBase(serverBase)
+        updateBaseURL(serverBase)
       }
       
-      const data = await api.generateOTP(cleanMobileNumber)
-
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to send OTP')
-      }
-
-      // OTP sent successfully
+      // Optimistically update UI first for better UX
       setStep('otp')
       setCountdown(60) // 60 second countdown
       setMobile(cleanMobileNumber) // Update with cleaned mobile
-    } catch (err: any) {
+      
+      // Then send OTP (non-blocking)
+      const data = await api.generateOTP(cleanMobileNumber)
+
+      if (!data.success) {
+        // Revert UI if failed
+        setStep('mobile')
+        throw new Error(data.error || 'Failed to send OTP')
+      }
+
+      // OTP sent successfully (UI already updated)
+      console.log('[AUTH] OTP sent successfully')
+    } catch (err) {
       console.error('Send OTP error:', err)
-      setError(err.message || 'Failed to send OTP. Please try again.')
+      setError(err?.message || 'Failed to send OTP. Please try again.')
+      // Revert to mobile step on error
+      setStep('mobile')
     } finally {
       setLoading(false)
     }
@@ -107,8 +120,11 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
     e?.preventDefault()
     setError('')
 
-    if (otp.length < 4) {
-      setError('Please enter the complete OTP')
+    // Convert OTP array to string
+    const otpString = otp.join('')
+    
+    if (otpString.length < OTP_LENGTH) {
+      setError(`Please enter the complete ${OTP_LENGTH}-digit OTP`)
       return
     }
 
@@ -117,10 +133,11 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
       const cleanMobileNumber = cleanMobile(mobile)
       // Update server base if needed
       if (serverBase) {
-        updateServerBase(serverBase)
+        useApiStore.getState().setServerBase(serverBase)
+        updateBaseURL(serverBase)
       }
       
-      const data = await api.verifyOTP(cleanMobileNumber, otp, name.trim() || undefined)
+      const data = await api.verifyOTP(cleanMobileNumber, otpString, name.trim() || undefined)
 
       if (!data.success) {
         // Check if user needs to provide name (new user registration)
@@ -140,8 +157,10 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
         token: data.token
       }
 
-      // Save to localStorage
-      localStorage.setItem('bmi_user', JSON.stringify(userData))
+      // Save to Zustand store with 8-day session expiry (automatically persists to localStorage)
+      const { setUser: setSessionUser } = useUserSessionStore.getState()
+      setSessionUser(userData)
+      
       if (data.token) {
         localStorage.setItem('auth_token', data.token)
       }
@@ -150,8 +169,8 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
       onAuth(userData)
     } catch (err) {
       console.error('Verify OTP error:', err)
-      setError(err.message || 'Invalid OTP. Please try again.')
-      setOtp('') // Clear OTP on error
+      setError(err?.message || 'Invalid OTP. Please try again.')
+      setOtp(Array(OTP_LENGTH).fill('')) // Clear OTP on error
     } finally {
       setLoading(false)
     }
@@ -159,14 +178,14 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
 
   const handleResendOTP = async () => {
     if (countdown > 0) return
-    setOtp('')
+    setOtp(Array(OTP_LENGTH).fill(''))
     setError('')
     await handleSendOTP()
   }
 
   const handleBackToMobile = () => {
     setStep('mobile')
-    setOtp('')
+    setOtp(Array(OTP_LENGTH).fill(''))
     setError('')
   }
 
@@ -180,6 +199,40 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
     setStep('otp')
     setError('')
   }
+
+const handleOtpChange = (index, value) => {
+  if (!/^\d?$/.test(value)) return;
+
+  const newOtp = [...otp];
+  newOtp[index] = value;
+  setOtp(newOtp);
+  setError('');
+
+  if (value && index < OTP_LENGTH - 1) {
+    otpRefs.current[index + 1]?.focus();
+  }
+};
+
+const handleOtpKeyDown = (index, e) => {
+  if (e.key === 'Backspace' && !otp[index] && index > 0) {
+    otpRefs.current[index - 1]?.focus();
+  }
+};
+
+const handleOtpPaste = (e) => {
+  e.preventDefault();
+  const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LENGTH);
+  if (!pasted) return;
+
+  const newOtp = Array(OTP_LENGTH).fill('');
+  pasted.split('').forEach((digit, i) => {
+    newOtp[i] = digit;
+  });
+
+  setOtp(newOtp);
+  otpRefs.current[Math.min(pasted.length, OTP_LENGTH) - 1]?.focus();
+};
+
 
   // Mobile input step
   if (step === 'mobile') {
@@ -258,7 +311,7 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
                   <button
                     type="button"
                     onClick={() => window.location.href = '/dashboard'}
-                    className="text-accent-600 hover:text-accent-700 font-medium text-sm transition-colors"
+                    className="text-primary-600 hover:text-primary-700 font-medium text-sm transition-colors"
                   >
                     View My Dashboard →
                   </button>
@@ -360,31 +413,42 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
 
         <div className="card">
           <form ref={formRef} onSubmit={handleVerifyOTP} className="space-y-6">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Enter OTP
-              </label>
-              <input
-                ref={otpInputRef}
-                type="text"
-                value={otp}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, '')
-                  if (value.length <= 6) {
-                    setOtp(value)
-                    setError('')
-                  }
-                }}
-                placeholder="Enter 6-digit OTP"
-                className="input-field text-center text-2xl tracking-widest font-mono"
-                required
-                maxLength={6}
-                autoFocus
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                OTP is valid for 5 minutes
-              </p>
-            </div>
+          <div>
+  <label className="block text-sm font-semibold text-gray-700 mb-3">
+    Enter OTP
+  </label>
+
+  <div
+    className="flex justify-center gap-3"
+    onPaste={handleOtpPaste}
+  >
+    {otp.map((digit, index) => (
+      <input
+        key={index}
+        ref={(el) => (otpRefs.current[index] = el)}
+        type="text"
+        inputMode="numeric"
+        maxLength={1}
+        value={digit}
+        onChange={(e) => handleOtpChange(index, e.target.value)}
+        onKeyDown={(e) => handleOtpKeyDown(index, e)}
+        className="
+          w-12 h-14
+          text-center text-2xl font-mono
+          border border-gray-300 rounded-xl
+          focus:outline-none focus:ring-2 focus:ring-primary-500
+          transition
+        "
+        autoFocus={index === 0}
+      />
+    ))}
+  </div>
+
+  <p className="text-xs text-gray-500 mt-2 text-center">
+    OTP is valid for 5 minutes
+  </p>
+</div>
+
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
@@ -395,7 +459,7 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
             <button 
               type="submit" 
               className="w-full btn-primary"
-              disabled={loading || otp.length < 4}
+              disabled={loading || otp.join('').length < OTP_LENGTH}
             >
               {loading ? 'Verifying...' : 'Verify OTP'}
             </button>

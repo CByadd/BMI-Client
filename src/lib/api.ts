@@ -27,36 +27,26 @@ export const api = {
 
   // OTP
   generateOTP: async (mobile: string) => {
-    const { setLoading, setError } = useApiStore.getState();
+    // Don't use global loading for OTP - let components handle their own loading state
     try {
-      setLoading(true);
-      setError(null);
       const response = await axiosInstance.post('/api/otp/generate', { mobile });
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to send OTP';
-      setError(errorMessage);
-      throw error;
-    } finally {
-      setLoading(false);
+      throw new Error(errorMessage);
     }
   },
 
   verifyOTP: async (mobile: string, otp: string, name?: string) => {
-    const { setLoading, setError } = useApiStore.getState();
+    // Don't use global loading for OTP verification - let components handle their own loading state
     try {
-      setLoading(true);
-      setError(null);
       const payload: any = { mobile, otp };
       if (name) payload.name = name;
       const response = await axiosInstance.post('/api/otp/verify', payload);
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to verify OTP';
-      setError(errorMessage);
-      throw error;
-    } finally {
-      setLoading(false);
+      throw new Error(errorMessage);
     }
   },
 
