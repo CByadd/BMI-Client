@@ -15,6 +15,7 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
   const [error, setError] = useState('')
   const [countdown, setCountdown] = useState(0)
   const [isSignup, setIsSignup] = useState(false)
+  const [mockMode, setMockMode] = useState(false)
   const containerRef = useRef(null)
   const formRef = useRef(null)
   const OTP_LENGTH = 6
@@ -104,8 +105,16 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
         throw new Error(data.error || 'Failed to send OTP')
       }
 
+      // Check if mock mode is enabled
+      if (data.mockMode || data.otp === '000000') {
+        setMockMode(true)
+        console.log('[AUTH] Mock mode detected - use OTP: 000000')
+      } else {
+        setMockMode(false)
+      }
+
       // OTP sent successfully (UI already updated)
-      console.log('[AUTH] OTP sent successfully')
+      console.log('[AUTH] OTP sent successfully', { mockMode: data.mockMode, otp: data.otp })
     } catch (err) {
       console.error('Send OTP error:', err)
       setError(err?.message || 'Failed to send OTP. Please try again.')
@@ -137,7 +146,15 @@ function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
         updateBaseURL(serverBase)
       }
       
-      const data = await api.verifyOTP(cleanMobileNumber, otpString, name.trim() || undefined)
+      // Always send name - it's required and collected in the mobile step
+      if (!name.trim()) {
+        setError('Name is required. Please go back and enter your name.')
+        setStep('mobile')
+        setLoading(false)
+        return
+      }
+      
+      const data = await api.verifyOTP(cleanMobileNumber, otpString, name.trim())
 
       if (!data.success) {
         // Check if user needs to provide name (new user registration)
@@ -261,6 +278,27 @@ const handleOtpPaste = (e) => {
             <form ref={formRef} onSubmit={handleSendOTP} className="space-y-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value)
+                    setError('')
+                  }}
+                  placeholder="Enter your full name"
+                  className="input-field"
+                  required
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  We'll use this to personalize your experience
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Mobile Number
                 </label>
                 <input
@@ -277,7 +315,6 @@ const handleOtpPaste = (e) => {
                   className="input-field"
                   required
                   maxLength={10}
-                  autoFocus
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   We'll send you an OTP to verify your number
@@ -293,7 +330,7 @@ const handleOtpPaste = (e) => {
               <button 
                 type="submit" 
                 className="w-full btn-primary"
-                disabled={loading || cleanMobile(mobile).length !== 10}
+                disabled={loading || cleanMobile(mobile).length !== 10 || !name.trim()}
               >
                 {loading ? 'Sending OTP...' : 'Send OTP'}
               </button>
@@ -409,6 +446,13 @@ const handleOtpPaste = (e) => {
           <p className="text-gray-600">
             We've sent an OTP to <span className="font-semibold">{mobile}</span>
           </p>
+          {mockMode && (
+            <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-yellow-800 font-semibold text-center">
+                🧪 Mock Mode: Use OTP <span className="font-mono text-lg bg-yellow-100 px-2 py-1 rounded">000000</span>
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="card">
