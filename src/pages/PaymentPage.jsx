@@ -7,7 +7,7 @@ import UserMenu from '../components/UserMenu'
 import ScreenLogo from '../components/ScreenLogo'
 import { useUserSessionStore } from '../stores/userSessionStore'
 
-function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
+function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
   const { clearUser } = useUserSessionStore()
   const [processing, setProcessing] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState(9) // Default amount
