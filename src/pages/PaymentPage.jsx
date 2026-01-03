@@ -111,6 +111,7 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase }) {
         notes: {
           userId: user?.userId || '',
           screenId: screenId || '',
+          bmiId: bmiId || '', // Include bmiId in payment order notes for server auto-trigger
           userName: user?.name || '',
           userMobile: user?.mobile || ''
         }
