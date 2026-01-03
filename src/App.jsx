@@ -234,12 +234,30 @@ function App() {
             startProgressAnimation()
           }, 5000)
         } else if (fromPlayerAppF1) {
-          console.log(`[CLIENT] Coming from PlayerApp BMI F1, showing login/payment flow`)
-          // F1: Show login/payment flow first, then synchronized flow after payment
-          setCurrentPage('auth')
+          // F1: Check if user has valid session - if yes, skip auth and go to payment
+          const currentUser = user || getUserFromStorage()
+          if (currentUser && currentUser.userId && isSessionValidSync()) {
+            console.log(`[CLIENT] F1 QR code visit with valid session - skipping auth, going to payment`)
+            setUser(currentUser) // Ensure user state is set
+            useUserSessionStore.getState().setUser(currentUser) // Sync to session store
+            setCurrentPage('payment')
+          } else {
+            console.log(`[CLIENT] Coming from PlayerApp BMI F1, showing login/payment flow`)
+            // F1: Show login/payment flow first, then synchronized flow after payment
+            setCurrentPage('auth')
+          }
         } else {
-          // Regular web users: show login/payment flow
-          setCurrentPage('auth')
+          // Regular web users: Check if user has valid session
+          const currentUser = user || getUserFromStorage()
+          if (currentUser && currentUser.userId && isSessionValidSync()) {
+            console.log(`[CLIENT] QR code visit with valid session - skipping auth, going to payment`)
+            setUser(currentUser) // Ensure user state is set
+            useUserSessionStore.getState().setUser(currentUser) // Sync to session store
+            setCurrentPage('payment')
+          } else {
+            // Regular web users: show login/payment flow
+            setCurrentPage('auth')
+          }
         }
       } catch (e) {
         console.error('[CLIENT] Fetch error:', e)
