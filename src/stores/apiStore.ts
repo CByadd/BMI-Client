@@ -16,7 +16,8 @@ interface ApiState {
 export const useApiStore = create<ApiState>((set) => ({
   isLoading: false,
   error: null,
-  serverBase: 'https://bmi-server-eight.vercel.app',
+  serverBase: ' https://wan-changeable-efferently.ngrok-free.dev',
+  // serverBase: 'https://bmi-server-eight.vercel.app',
   setLoading: (loading: boolean) => set({ isLoading: loading }),
   setError: (error: string | null) => set({ error }),
   setServerBase: (base: string) => set({ serverBase: base }),

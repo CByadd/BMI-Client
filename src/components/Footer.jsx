@@ -144,9 +144,9 @@ function Footer() {
               © {currentYear} Well2Day. All rights reserved by Amsoft Services.
             </p>
             <div className="flex items-center space-x-6 text-sm text-gray-600">
-              <span>5M+ Users</span>
+              <span>5K+ Users</span>
               <span>•</span>
-              <span>150+ Machines</span>
+              <span>50+ Machines</span>
             </div>
           </div>
         </div>
