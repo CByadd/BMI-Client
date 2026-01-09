@@ -119,9 +119,14 @@ export const api = {
     }
   },
 
-  notifyPaymentSuccess: async (userId: string | undefined, bmiId: string, appVersion: string) => {
+  notifyPaymentSuccess: async (userId: string | undefined, bmiId: string, appVersion: string, paymentToken?: string) => {
     try {
-      await axiosInstance.post('/api/payment-success', { userId, bmiId, appVersion });
+      const payload: any = { userId, bmiId, appVersion };
+      if (paymentToken) {
+        payload.paymentToken = paymentToken;
+        console.log('[PAYMENT] Including payment token in payment success notification');
+      }
+      await axiosInstance.post('/api/payment-success', payload);
     } catch (error: any) {
       console.error('Payment success notification error:', error);
       // Don't throw - this is a fire-and-forget notification

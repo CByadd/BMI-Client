@@ -30,6 +30,7 @@ function App() {
   const screenId = params.get('screenId') || ''
   const bmiId = params.get('bmiId') || ''
   const appVersion = params.get('appVersion') || '' // Detect specific app version
+  const paymentToken = params.get('paymentToken') || '' // Payment token for verification
   const fromPlayerAppF2 = appVersion === 'f2' // Detect if coming from PlayerApp BMI F2
   const fromPlayerAppF1 = appVersion === 'f1' // Detect if coming from PlayerApp BMI F1
   const fromPlayerApp = fromPlayerAppF1 || fromPlayerAppF2 // Detect if coming from any PlayerApp version
@@ -369,7 +370,8 @@ function App() {
       }
     }
     
-    await api.notifyPaymentSuccess(user?.userId, bmiId, appVersion);
+    // Include payment token in payment success notification
+    await api.notifyPaymentSuccess(user?.userId, bmiId, appVersion, paymentToken);
     
     setTimeout(() => {
       setCurrentPage('bmi-result');
