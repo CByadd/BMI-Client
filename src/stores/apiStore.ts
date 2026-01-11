@@ -2,6 +2,7 @@
  * Zustand Store for API State Management (Client)
  */
 import { create } from 'zustand';
+import { getApiBaseUrl } from '../config/api.config';
 
 interface ApiState {
   isLoading: boolean;
@@ -16,8 +17,7 @@ interface ApiState {
 export const useApiStore = create<ApiState>((set) => ({
   isLoading: false,
   error: null,
-  serverBase: ' https://wan-changeable-efferently.ngrok-free.dev',
-  // serverBase: 'https://bmi-server-eight.vercel.app',
+  serverBase: getApiBaseUrl(), // Initialize from config
   setLoading: (loading: boolean) => set({ isLoading: loading }),
   setError: (error: string | null) => set({ error }),
   setServerBase: (base: string) => set({ serverBase: base }),

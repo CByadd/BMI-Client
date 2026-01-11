@@ -18,6 +18,7 @@ import Footer from './components/Footer'
 import { useApiStore } from './stores/apiStore'
 import { useUserSessionStore } from './stores/userSessionStore'
 import { updateBaseURL } from './lib/axios'
+import { getApiBaseUrl } from './config/api.config'
 import api from './lib/api'
 import { getUserFromStorage, isSessionValidSync } from './utils/sessionHelper'
 
@@ -146,10 +147,8 @@ function App() {
   const { setServerBase: setStoreServerBase } = useApiStore()
 
   useEffect(() => {
-    // Use the server base from URL hash if available, otherwise use default
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-    const fromHash = hash.get('server')
-    const base = fromHash || 'https://bmi-server-eight.vercel.app'
+    // Get base URL from config (which handles URL params, env vars, and defaults)
+    const base = getApiBaseUrl()
     setServerBase(base)
     setStoreServerBase(base)
     updateBaseURL(base)

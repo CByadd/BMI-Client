@@ -3,31 +3,20 @@
  */
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useApiStore } from '../stores/apiStore';
-
-// Default server base URL
-const DEFAULT_SERVER_BASE = 'https://wan-changeable-efferently.ngrok-free.dev';
+import { getApiBaseUrl, apiConfig } from '../config/api.config';
 
 /**
- * Get server base URL from store or environment
+ * Get server base URL - checks store first, then falls back to config
  */
 const getServerBase = (): string => {
-  // First check zustand store
+  // First check zustand store (for runtime updates)
   const storeBase = useApiStore.getState().serverBase;
-  if (storeBase) {
-    return storeBase;
+  if (storeBase && storeBase.trim()) {
+    return storeBase.trim();
   }
   
-  // Check URL hash for server override
-  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-  const fromHash = hash.get('server');
-  if (fromHash) {
-    return fromHash;
-  }
-  
-  // Use environment variable or default
-  return import.meta.env.VITE_API_URL || 
-         import.meta.env.REACT_APP_API_URL || 
-         DEFAULT_SERVER_BASE;
+  // Fall back to config (which checks URL params, env vars, or default)
+  return getApiBaseUrl();
 };
 
 /**
@@ -35,11 +24,8 @@ const getServerBase = (): string => {
  */
 const axiosInstance: AxiosInstance = axios.create({
   baseURL: getServerBase(),
-  headers: {
-    'Content-Type': 'application/json',
-    'ngrok-skip-browser-warning': 'true',
-  },
-  timeout: 30000, // 30 seconds
+  timeout: apiConfig.timeout,
+  headers: apiConfig.headers,
 });
 
 /**
