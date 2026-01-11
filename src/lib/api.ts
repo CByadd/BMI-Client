@@ -51,15 +51,31 @@ export const api = {
   },
 
   // User
-  createUser: async (name: string, mobile: string) => {
+  createUser: async (name: string, gender: string, age: number, mobile: string) => {
     const { setLoading, setError } = useApiStore.getState();
     try {
       setLoading(true);
       setError(null);
-      const response = await axiosInstance.post('/api/user', { name, mobile });
+      const response = await axiosInstance.post('/api/user', { name, gender, age, mobile });
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to create user';
+      setError(errorMessage);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  },
+
+  loginUser: async (mobile: string) => {
+    const { setLoading, setError } = useApiStore.getState();
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await axiosInstance.post('/api/user/login', { mobile });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to login';
       setError(errorMessage);
       throw error;
     } finally {

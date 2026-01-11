@@ -5,7 +5,7 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 import { useApiStore } from '../stores/apiStore';
 
 // Default server base URL
-const DEFAULT_SERVER_BASE = 'https://wan-changeable-efferently.ngrok-free.dev ';
+const DEFAULT_SERVER_BASE = 'https://wan-changeable-efferently.ngrok-free.dev';
 
 /**
  * Get server base URL from store or environment
