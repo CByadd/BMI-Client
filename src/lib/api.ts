@@ -119,12 +119,16 @@ export const api = {
     }
   },
 
-  notifyPaymentSuccess: async (userId: string | undefined, bmiId: string, appVersion: string, paymentToken?: string) => {
+  notifyPaymentSuccess: async (userId: string | undefined, bmiId: string, appVersion: string, paymentToken?: string, paymentAmount?: number) => {
     try {
       const payload: any = { userId, bmiId, appVersion };
       if (paymentToken) {
         payload.paymentToken = paymentToken;
         console.log('[PAYMENT] Including payment token in payment success notification');
+      }
+      if (paymentAmount !== null && paymentAmount !== undefined) {
+        payload.paymentAmount = paymentAmount;
+        console.log('[PAYMENT] Including payment amount in payment success notification:', paymentAmount);
       }
       await axiosInstance.post('/api/payment-success', payload);
     } catch (error: any) {

@@ -172,7 +172,7 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
           yoyo: true,
           repeat: 1,
           ease: "power2.inOut",
-          onComplete: onPaymentSuccess
+          onComplete: () => onPaymentSuccess(paymentAmount)
         })
       } else {
         throw new Error('Payment verification failed')
