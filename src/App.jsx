@@ -355,7 +355,7 @@ function App() {
     }
   }
 
-  const handlePaymentSuccess = async () => {
+  const handlePaymentSuccess = async (paymentAmount) => {
     setCurrentPage('waiting');
     
     // For F1 flow, link user to BMI record after payment completion
@@ -370,8 +370,8 @@ function App() {
       }
     }
     
-    // Include payment token in payment success notification
-    await api.notifyPaymentSuccess(user?.userId, bmiId, appVersion, paymentToken);
+    // Include payment amount and token in payment success notification
+    await api.notifyPaymentSuccess(user?.userId, bmiId, appVersion, paymentToken, paymentAmount);
     
     setTimeout(() => {
       setCurrentPage('bmi-result');
