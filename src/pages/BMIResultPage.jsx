@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { gsap } from 'gsap'
+import { api } from '../lib/api'
 
 function BMIResultPage({ data, user, onNavigate, appVersion }) {
   const containerRef = useRef(null)
@@ -58,6 +59,30 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
 
   const weightRecommendation = data?.height ? calculateWeightRecommendation(data.height) : null
   const waterRecommendation = data?.height ? calculateWaterRecommendation(data.height) : null
+  
+  // Health Tips State
+  const [healthTips, setHealthTips] = useState<string[]>([])
+  const [healthTipsLoading, setHealthTipsLoading] = useState(false)
+
+  // Fetch health tips when category is available
+  useEffect(() => {
+    if (data?.category) {
+      setHealthTipsLoading(true)
+      api.getHealthTips(data.category)
+        .then((response) => {
+          if (response.ok && response.tips) {
+            // Show first 5 tips
+            setHealthTips(response.tips.slice(0, 5))
+          }
+        })
+        .catch((error) => {
+          console.error('Error fetching health tips:', error)
+        })
+        .finally(() => {
+          setHealthTipsLoading(false)
+        })
+    }
+  }, [data?.category])
 
   useEffect(() => {
     if (containerRef.current && bmiValueRef.current && cardsRef.current) {
@@ -249,6 +274,23 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Health Tips Section */}
+        {healthTips.length > 0 && (
+          <div className="card bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 border-2 border-amber-200 mb-8">
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-gray-900 mb-3">Health Tips</h3>
+              <div className="space-y-3">
+                {healthTips.map((tip, index) => (
+                  <div key={index} className="flex items-start">
+                    <span className="text-amber-600 font-bold mr-3">•</span>
+                    <p className="text-gray-700 flex-1">{tip}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

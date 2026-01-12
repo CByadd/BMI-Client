@@ -189,6 +189,17 @@ export const api = {
     }
   },
 
+  // Health Tips
+  getHealthTips: async (category: string) => {
+    try {
+      const response = await axiosInstance.get(`/api/health-tips/${encodeURIComponent(category)}`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Get health tips error:', error);
+      throw error;
+    }
+  },
+
   // Session
   claimSession: async (token: string) => {
     try {
