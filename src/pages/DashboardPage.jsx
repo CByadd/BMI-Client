@@ -60,7 +60,7 @@ function DashboardPage({ user, data, serverBase }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className=" bg-primary-600 rounded-xl flex items-center justify-center ">
-                <img src="https://res.cloudinary.com/dvmuf6jfj/image/upload/v1759391612/Well2Day/imgi_1_Group_2325_f1mz13.png" alt="logo" className="h-12" />
+                <img src="https://api.well2day.in/assets/images/logo.png" alt="logo" className="h-12" />
               </div>
               <div>
                 {/* <h1 className="text-xl font-bold text-gray-900">Well2Day</h1> */}
