@@ -511,7 +511,7 @@ function App() {
         {currentPageComponent}
       </div>
       {showFooter && <Footer />}
-      {!isStaticPage && <DevPanel />}
+      {/* {!isStaticPage && <DevPanel />} */}
     </div>
   )
 }
