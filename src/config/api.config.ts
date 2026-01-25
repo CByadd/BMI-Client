@@ -13,6 +13,7 @@ export const API_BASE_URL =
  * Get API base URL from various sources (in priority order):
  * 1. URL hash parameter (?server=... or #server=...)
  * 2. Environment variable (VITE_API_URL or REACT_APP_API_URL)
+ 
  * 3. Default constant (API_BASE_URL)
  */
 export const getApiBaseUrl = (): string => {
