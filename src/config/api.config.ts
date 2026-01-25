@@ -6,7 +6,8 @@
 export const API_BASE_URL = 
   import.meta.env.VITE_API_URL || 
   import.meta.env.REACT_APP_API_URL || 
-  'https://wan-changeable-efferently.ngrok-free.dev';
+  // 'https://wan-changeable-efferently.ngrok-free.dev';
+  'https://api.well2day.in';
 
 /**
  * Get API base URL from various sources (in priority order):

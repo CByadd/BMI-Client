@@ -61,7 +61,7 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
   const waterRecommendation = data?.height ? calculateWaterRecommendation(data.height) : null
   
   // Health Tips State
-  const [healthTips, setHealthTips] = useState<string[]>([])
+  const [healthTips, setHealthTips] = useState([])
   const [healthTipsLoading, setHealthTipsLoading] = useState(false)
 
   // Fetch health tips when category is available
