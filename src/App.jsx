@@ -32,7 +32,7 @@ function App() {
   const bmiId = params.get('bmiId') || ''
   const appVersion = params.get('appVersion') || '' // Detect specific app version
   const paymentToken = params.get('paymentToken') || '' // Payment token for verification
-  const fromPlayerAppF2 = appVersion === 'f2' // Detect if coming from PlayerApp BMI F2
+  const fromPlayerAppF2 = appVersion === 'f2' // F2 = claim-only: no payment, link BMI to user when they log in or are already logged in
   const fromPlayerAppF1 = appVersion === 'f1' // Detect if coming from PlayerApp BMI F1
   const fromPlayerApp = fromPlayerAppF1 || fromPlayerAppF2 // Detect if coming from any PlayerApp version
   const [serverBase, setServerBase] = useState('')
