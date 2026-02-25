@@ -59,7 +59,7 @@ function AnalyticsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="bg-primary-600 rounded-xl flex items-center justify-center">
-                <img src="https://api.well2day.in/assets/images/logo.png" alt="logo" />
+                <img src="https://well2day.in/assets/img/Group%202325.png" alt="logo" />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">BMI Analytics</h1>

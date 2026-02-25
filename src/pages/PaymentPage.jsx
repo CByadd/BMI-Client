@@ -198,7 +198,7 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
             <div className="flex items-center space-x-3">
               <div className="bg-primary-600 rounded-xl flex items-center justify-center">
                 <img 
-                  src="https://api.well2day.in/assets/images/logo.png" 
+                  src="https://well2day.in/assets/img/Group%202325.png" 
                   alt="Well2Day Logo" 
                   className="h-8 w-auto"
                 />
