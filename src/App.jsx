@@ -47,6 +47,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState('loading')
   const [progressValue, setProgressValue] = useState(0)
   const [fortuneMessage, setFortuneMessage] = useState('')
+  const isQRCodeVisit = Boolean(screenId && bmiId)
 
   // Get session store methods
   const { setUser: setSessionUser } = useUserSessionStore()
@@ -164,6 +165,29 @@ function App() {
     }
   }, [currentPage, user])
 
+  const finalizeQRCodeFlow = async () => {
+    if (isQRCodeVisit && bmiId) {
+      try {
+        await api.expireBMILink(bmiId)
+      } catch (expireError) {
+        console.error('[CLIENT] Failed to expire BMI link:', expireError)
+      }
+
+      window.history.replaceState({}, '', '/dashboard')
+    }
+
+    setCurrentPage('dashboard')
+  }
+
+  const handleNavigate = (nextPage) => {
+    if (nextPage === 'dashboard') {
+      finalizeQRCodeFlow()
+      return
+    }
+
+    setCurrentPage(nextPage)
+  }
+
   useEffect(() => {
     async function run() {
       if (currentPage === 'dashboard' || currentPage === 'analytics') return
@@ -262,8 +286,23 @@ function App() {
       } catch (e) {
         console.error('[CLIENT] Fetch error:', e)
         const errorMessage = e?.message || 'Failed to fetch BMI data'
+        const errorStatus = e?.status || e?.response?.status
         setError(errorMessage)
-        if (e.status === 404 || errorMessage.includes('not found')) {
+        if (errorStatus === 410 || errorMessage.includes('link_expired')) {
+          const currentSessionUser = useUserSessionStore.getState().user || user || getUserFromStorage()
+          if (currentSessionUser && currentSessionUser.userId && isSessionValidSync()) {
+            console.log('[CLIENT] BMI link expired, redirecting to dashboard')
+            setUser(currentSessionUser)
+            useUserSessionStore.getState().setUser(currentSessionUser)
+            window.history.replaceState({}, '', '/dashboard')
+            setCurrentPage('dashboard')
+          } else {
+            console.log('[CLIENT] BMI link expired without active session, redirecting to auth')
+            window.history.replaceState({}, '', '/')
+            setError('This BMI link has expired. Please log in to view your dashboard.')
+            setCurrentPage('auth')
+          }
+        } else if (errorStatus === 404 || errorMessage.includes('not found')) {
           setError('BMI record not found. Please create a new BMI record.')
           setCurrentPage('auth')
         } else if (errorMessage.includes('Invalid JSON') || errorMessage.includes('Unexpected token')) {
@@ -315,7 +354,7 @@ function App() {
       if (!isQRCodeVisit) {
         // Direct visit - go straight to dashboard
         console.log('[AUTH] Direct visit - going to dashboard');
-        setCurrentPage('dashboard');
+        handleNavigate('dashboard');
       } else if (fromPlayerAppF2) {
         // F2 flow: Auth -> Waiting -> BMI Result -> Dashboard
         console.log('[AUTH] F2 flow - going to waiting');
@@ -345,7 +384,7 @@ function App() {
       
       // Same logic for fallback
       if (!isQRCodeVisit) {
-        setCurrentPage('dashboard');
+        handleNavigate('dashboard');
       } else if (fromPlayerAppF2) {
         setCurrentPage('waiting');
       } else {
@@ -410,7 +449,7 @@ function App() {
         api.notifyFortuneGenerate(bmiId, appVersion).catch(e => console.error('Fortune notification error:', e));
         
         setTimeout(() => {
-          setCurrentPage('dashboard');
+          handleNavigate('dashboard');
         }, 10000);
         return;
       }
@@ -423,7 +462,7 @@ function App() {
         setCurrentPage('fortune');
         
         setTimeout(() => {
-          setCurrentPage('dashboard');
+          handleNavigate('dashboard');
         }, 10000);
       }
     } catch (e) {
@@ -432,7 +471,7 @@ function App() {
       setCurrentPage('fortune');
       
       setTimeout(() => {
-        setCurrentPage('dashboard');
+        handleNavigate('dashboard');
       }, 10000);
     }
   }
@@ -463,7 +502,7 @@ function App() {
     fromPlayerAppF2,
     onAuth: handleAuth,
     onPaymentSuccess: handlePaymentSuccess,
-    onNavigate: setCurrentPage
+    onNavigate: handleNavigate
   }
 
   const currentPageComponent = (() => {

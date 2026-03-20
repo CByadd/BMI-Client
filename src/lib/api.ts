@@ -94,6 +94,16 @@ export const api = {
     }
   },
 
+  expireBMILink: async (bmiId: string) => {
+    try {
+      const response = await axiosInstance.post(`/api/bmi/${bmiId}/expire-link`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Expire BMI link error:', error);
+      throw error;
+    }
+  },
+
   // Payment
   getPaymentKey: async () => {
     try {
