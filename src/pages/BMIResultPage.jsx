@@ -6,6 +6,8 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
   const containerRef = useRef(null)
   const bmiValueRef = useRef(null)
   const cardsRef = useRef(null)
+  const hasValidHeight = Boolean(data?.isHeightValid ?? (Number(data?.height) > 0))
+  const hasValidBMI = hasValidHeight && Number.isFinite(Number(data?.bmi)) && Number(data?.bmi) > 0
 
   const getBMIColor = (bmi) => {
     if (bmi < 18.5) return 'text-blue-600'
@@ -57,8 +59,8 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
     }
   }
 
-  const weightRecommendation = data?.height ? calculateWeightRecommendation(data.height) : null
-  const waterRecommendation = data?.height ? calculateWaterRecommendation(data.height) : null
+  const weightRecommendation = hasValidHeight && data?.height ? calculateWeightRecommendation(data.height) : null
+  const waterRecommendation = hasValidHeight && data?.height ? calculateWaterRecommendation(data.height) : null
   
   // Health Tips State
   const [healthTips, setHealthTips] = useState([])
@@ -66,7 +68,7 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
 
   // Fetch health tips when category is available
   useEffect(() => {
-    if (data?.category) {
+    if (data?.category && hasValidHeight) {
       setHealthTipsLoading(true)
       api.getHealthTips(data.category)
         .then((response) => {
@@ -82,7 +84,7 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
           setHealthTipsLoading(false)
         })
     }
-  }, [data?.category])
+  }, [data?.category, hasValidHeight])
 
   useEffect(() => {
     if (containerRef.current && bmiValueRef.current && cardsRef.current) {
@@ -93,20 +95,22 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
       )
       
       // BMI value counter animation
-      gsap.fromTo(bmiValueRef.current,
-        { textContent: 0, scale: 0.5 },
-        { 
-          textContent: data?.bmi?.toFixed?.(1) ?? data?.bmi ?? 0,
-          scale: 1,
-          duration: 1.5,
-          delay: 0.5,
-          ease: "back.out(1.7)",
-          snap: { textContent: 0.1 },
-          onUpdate: function() {
-            bmiValueRef.current.textContent = parseFloat(this.targets()[0].textContent).toFixed(1)
+      if (hasValidBMI) {
+        gsap.fromTo(bmiValueRef.current,
+          { textContent: 0, scale: 0.5 },
+          { 
+            textContent: data?.bmi?.toFixed?.(1) ?? data?.bmi ?? 0,
+            scale: 1,
+            duration: 1.5,
+            delay: 0.5,
+            ease: "back.out(1.7)",
+            snap: { textContent: 0.1 },
+            onUpdate: function() {
+              bmiValueRef.current.textContent = parseFloat(this.targets()[0].textContent).toFixed(1)
+            }
           }
-        }
-      )
+        )
+      }
       
       // Cards stagger animation
       gsap.fromTo(cardsRef.current.children,
@@ -132,7 +136,7 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
       
       return () => clearTimeout(timer);
     }
-  }, [data, appVersion, onNavigate])
+  }, [data, appVersion, onNavigate, hasValidBMI])
 
   if (!data) return null
 
@@ -145,18 +149,29 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
         </div>
 
         {/* Main BMI Display */}
-        <div className={`card text-center mb-8 border-2 ${getBMIBgColor(data.bmi)}`}>
+        <div className={`card text-center mb-8 border-2 ${hasValidBMI ? getBMIBgColor(data.bmi) : 'bg-slate-50 border-slate-200'}`}>
           <div className="mb-4">
-            <div ref={bmiValueRef} className={`text-6xl font-bold ${getBMIColor(data.bmi)} mb-2`}>
-              0.0
-            </div>
-            <div className="text-2xl font-semibold text-gray-700 mb-2">{data.category}</div>
-            <div className="text-gray-600">Body Mass Index</div>
+            {hasValidBMI ? (
+              <>
+                <div ref={bmiValueRef} className={`text-6xl font-bold ${getBMIColor(data.bmi)} mb-2`}>
+                  0.0
+                </div>
+                <div className="text-2xl font-semibold text-gray-700 mb-2">{data.category}</div>
+                <div className="text-gray-600">Body Mass Index</div>
+              </>
+            ) : (
+              <>
+                <div className="text-4xl font-bold text-slate-700 mb-2">Weight Only</div>
+                <div className="text-lg font-semibold text-gray-700 mb-2">Height unavailable</div>
+                <div className="text-gray-600">BMI was not calculated for this measurement.</div>
+              </>
+            )}
           </div>
         </div>
 
         {/* Details Grid */}
         <div ref={cardsRef} className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          {hasValidHeight && (
           <div className="card">
             <div className="flex items-center mb-3">
               <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center mr-3">
@@ -170,6 +185,7 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
               </div>
             </div>
           </div>
+          )}
 
           <div className="card">
             <div className="flex items-center mb-3">
@@ -279,7 +295,7 @@ function BMIResultPage({ data, user, onNavigate, appVersion }) {
         )}
 
         {/* Health Tips Section */}
-        {healthTips.length > 0 && (
+        {healthTips.length > 0 && hasValidHeight && (
           <div className="card bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 border-2 border-amber-200 mb-8">
             <div className="space-y-4">
               <h3 className="text-lg font-bold text-gray-900 mb-3">Health Tips</h3>
