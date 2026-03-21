@@ -39,6 +39,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [data, setData] = useState(null)
+  const [linkStatus, setLinkStatus] = useState('unknown') // unknown, expired, linked, valid
   
   // Initialize user from localStorage IMMEDIATELY (synchronous, before any effects)
   const initialUser = getUserFromStorage()
@@ -238,6 +239,14 @@ function App() {
         console.log(`[CLIENT] BMI data received:`, json)
         setData(json)
         
+        // Determine link status for all QR visits
+        if (json.userId) {
+          console.log('[CLIENT] BMI record already linked to user:', json.userId)
+          setLinkStatus('linked')
+        } else {
+          setLinkStatus('valid')
+        }
+        
         // Handle different PlayerApp versions
         if (fromPlayerAppF2) {
           // Check if user is already logged in
@@ -246,7 +255,6 @@ function App() {
 
           // If record is already linked, redirect to dashboard/auth
           if (json.userId) {
-            console.log('[CLIENT] F2 Flow: BMI record already linked to user:', json.userId)
             if (hasValidSession) {
               console.log('[CLIENT] F2 Flow: Redirecting already linked record to dashboard')
               setCurrentPage('dashboard')
@@ -316,20 +324,21 @@ function App() {
         }
       } catch (e) {
         console.error('[CLIENT] Fetch error:', e)
-        const errorMessage = e?.message || 'Failed to fetch BMI data'
         const errorStatus = e?.status || e?.response?.status
+        const errorMessage = e?.response?.data?.message || e?.message || 'Unexpected server response. Please try again or scan QR code again.'
         setError(errorMessage)
+        
         if (errorStatus === 410 || errorMessage.includes('link_expired')) {
-          const currentSessionUser = useUserSessionStore.getState().user || user || getUserFromStorage()
-          if (currentSessionUser && currentSessionUser.userId && isSessionValidSync()) {
-            console.log('[CLIENT] BMI link expired, redirecting to dashboard')
-            setUser(currentSessionUser)
-            useUserSessionStore.getState().setUser(currentSessionUser)
-            window.history.replaceState({}, '', '/dashboard')
+          setLinkStatus('expired')
+          const currentUser = user || getUserFromStorage()
+          const hasValidSession = currentUser && currentUser.userId && isSessionValidSync()
+          
+          if (hasValidSession) {
+            console.log('[CLIENT] BMI link already expired, redirecting to dashboard')
             setCurrentPage('dashboard')
+            window.history.replaceState({}, '', '/dashboard')
           } else {
-            console.log('[CLIENT] BMI link expired without active session, redirecting to auth')
-            window.history.replaceState({}, '', '/')
+            console.log('[CLIENT] BMI link already expired, redirecting to auth')
             setError('This BMI link has expired. Please log in to view your dashboard.')
             setCurrentPage('auth')
           }
@@ -383,15 +392,12 @@ function App() {
         // Direct visit - go straight to dashboard
         console.log('[AUTH] Direct visit - going to dashboard');
         handleNavigate('dashboard');
+      } else if (linkStatus === 'expired' || linkStatus === 'linked') {
+        // If the record was already linked or expired, skip to dashboard
+        console.log(`[AUTH] Flow: BMI ${linkStatus}, going directly to dashboard`)
+        handleNavigate('dashboard')
       } else if (fromPlayerAppF2) {
         // F2 flow: Auth -> BMI Result -> Progress -> Fortune -> Dashboard
-        // If the record was already linked (someone scanned it already), skip to dashboard
-        if (data && data.userId) {
-          console.log('[AUTH] F2 Flow: BMI already linked, going to dashboard')
-          handleNavigate('dashboard')
-          return
-        }
-
         console.log('[AUTH] F2 flow - going directly to BMI results');
         setCurrentPage('bmi-result');
         
