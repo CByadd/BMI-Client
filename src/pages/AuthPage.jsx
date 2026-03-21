@@ -6,18 +6,24 @@ import { updateBaseURL } from '../lib/axios'
 import { useApiStore } from '../stores/apiStore'
 import { useUserSessionStore } from '../stores/userSessionStore'
 
-function AuthPage({ onAuth, screenId, serverBase, bmiId }) {
+function AuthPage({ onAuth, screenId, serverBase, bmiId, error: initialError }) {
   const [name, setName] = useState('')
   const [gender, setGender] = useState('')
   const [age, setAge] = useState('')
   const [mobile, setMobile] = useState('')
   const [isSignup, setIsSignup] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(initialError || '')
   const containerRef = useRef(null)
   const formRef = useRef(null)
 
   const { user: sessionUser } = useUserSessionStore()
+
+  useEffect(() => {
+    if (initialError) {
+      setError(initialError)
+    }
+  }, [initialError])
 
   useEffect(() => {
     // Load saved user data from session store

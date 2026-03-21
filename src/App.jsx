@@ -155,7 +155,6 @@ function App() {
     updateBaseURL(base)
   }, [setStoreServerBase])
 
-  // Protect dashboard and analytics pages - redirect to auth if no valid session
   useEffect(() => {
     if (currentPage === 'dashboard' || currentPage === 'analytics') {
       if (!isSessionValidSync() || !user || !user.userId) {
@@ -164,6 +163,15 @@ function App() {
       }
     }
   }, [currentPage, user])
+
+  // Safety check to prevent blank white screens
+  useEffect(() => {
+    // If loading is finished but we're still on the "loading" page, fall back to auth
+    if (!loading && currentPage === 'loading') {
+      console.log('[CLIENT] Loading finished with no page set, falling back to auth')
+      setCurrentPage('auth')
+    }
+  }, [loading, currentPage])
 
   const finalizeQRCodeFlow = async () => {
     if (isQRCodeVisit && bmiId) {
@@ -230,34 +238,57 @@ function App() {
         console.log(`[CLIENT] BMI data received:`, json)
         setData(json)
         
-        // If user is already logged in and BMI record has no user, link them (F2 only)
-        const currentSessionUser = useUserSessionStore.getState().user
-        if (currentSessionUser && currentSessionUser.userId && !json.userId && fromPlayerAppF2) {
-          try {
-            console.log('[CLIENT] F2 Flow: Auto-linking logged-in user to BMI record')
-            await api.linkUserToBMI(bmiId, currentSessionUser.userId)
-            console.log('[CLIENT] F2 Flow: Successfully auto-linked user to BMI record');
-            
-            // Update the data with user info
-            json.userId = currentSessionUser.userId;
-            json.user = currentSessionUser;
-            setData(json);
-          } catch (linkError) {
-            console.error('[CLIENT] F2 Flow: Error auto-linking user:', linkError);
-          }
-        }
-        
         // Handle different PlayerApp versions
         if (fromPlayerAppF2) {
-          console.log(`[CLIENT] Coming from PlayerApp BMI F2, auto-progressing through flow`)
-          setCurrentPage('bmi-result')
-          
-          // F2: Auto-progress through the flow
-          setTimeout(() => {
-            setCurrentPage('progress')
-            startProgressAnimation()
-          }, 5000)
-        } else if (fromPlayerAppF1) {
+          // Check if user is already logged in
+          const currentUser = user || getUserFromStorage()
+          const hasValidSession = currentUser && currentUser.userId && isSessionValidSync()
+
+          // If record is already linked, redirect to dashboard/auth
+          if (json.userId) {
+            console.log('[CLIENT] F2 Flow: BMI record already linked to user:', json.userId)
+            if (hasValidSession) {
+              console.log('[CLIENT] F2 Flow: Redirecting already linked record to dashboard')
+              setCurrentPage('dashboard')
+              window.history.replaceState({}, '', '/dashboard')
+            } else {
+              console.log('[CLIENT] F2 Flow: Redirecting already linked record to auth')
+              setCurrentPage('auth')
+            }
+            return
+          }
+
+          if (hasValidSession) {
+            console.log(`[CLIENT] F2 QR code visit with valid session - auto-linking and progressing`)
+            
+            // Link user if not already linked
+            try {
+              console.log('[CLIENT] F2 Flow: Auto-linking logged-in user to BMI record')
+              await api.linkUserToBMI(bmiId, currentUser.userId)
+              
+              // Update local data
+              json.userId = currentUser.userId
+              json.user = currentUser
+              setData(json)
+              console.log('[CLIENT] F2 Flow: Successfully linked user')
+            } catch (linkError) {
+              console.error('[CLIENT] F2 Flow: Error linking user:', linkError)
+            }
+
+            setCurrentPage('bmi-result')
+            
+            // F2: Auto-progress through the flow after 5 seconds
+            setTimeout(() => {
+              setCurrentPage('progress')
+              startProgressAnimation()
+            }, 5000)
+          } else {
+            console.log(`[CLIENT] F2 QR code visit without session - redirecting to auth`)
+            setCurrentPage('auth')
+          }
+          return
+        }
+ else if (fromPlayerAppF1) {
           // F1: Check if user has valid session - if yes, skip auth and go to payment
           const currentUser = user || getUserFromStorage()
           if (currentUser && currentUser.userId && isSessionValidSync()) {
@@ -302,11 +333,8 @@ function App() {
             setError('This BMI link has expired. Please log in to view your dashboard.')
             setCurrentPage('auth')
           }
-        } else if (errorStatus === 404 || errorMessage.includes('not found')) {
-          setError('BMI record not found. Please create a new BMI record.')
-          setCurrentPage('auth')
-        } else if (errorMessage.includes('Invalid JSON') || errorMessage.includes('Unexpected token')) {
-          setError('Server returned invalid response. Please create a new BMI record.')
+        } else {
+          console.error('[CLIENT] Unhandled fetch error:', e)
           setCurrentPage('auth')
         }
       } finally {
@@ -356,9 +384,22 @@ function App() {
         console.log('[AUTH] Direct visit - going to dashboard');
         handleNavigate('dashboard');
       } else if (fromPlayerAppF2) {
-        // F2 flow: Auth -> Waiting -> BMI Result -> Dashboard
-        console.log('[AUTH] F2 flow - going to waiting');
-        setCurrentPage('waiting');
+        // F2 flow: Auth -> BMI Result -> Progress -> Fortune -> Dashboard
+        // If the record was already linked (someone scanned it already), skip to dashboard
+        if (data && data.userId) {
+          console.log('[AUTH] F2 Flow: BMI already linked, going to dashboard')
+          handleNavigate('dashboard')
+          return
+        }
+
+        console.log('[AUTH] F2 flow - going directly to BMI results');
+        setCurrentPage('bmi-result');
+        
+        // F2: Auto-progress through the flow after 5 seconds
+        setTimeout(() => {
+          setCurrentPage('progress')
+          startProgressAnimation()
+        }, 5000)
       } else {
         // F1 flow: Auth -> Payment -> Waiting -> BMI Result -> Fortune -> Dashboard
         console.log('[AUTH] F1 flow - going to payment');

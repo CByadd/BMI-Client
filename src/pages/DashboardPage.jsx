@@ -4,7 +4,7 @@ import AnalyticsDashboard from '../components/AnalyticsDashboard'
 import UserMenu from '../components/UserMenu'
 import { useUserSessionStore } from '../stores/userSessionStore'
 
-function DashboardPage({ user, data, serverBase }) {
+function DashboardPage({ user, data, serverBase, onNavigate }) {
   const { clearUser } = useUserSessionStore()
   const containerRef = useRef(null)
   const cardsRef = useRef(null)
@@ -50,6 +50,10 @@ function DashboardPage({ user, data, serverBase }) {
   const handleLogout = () => {
     clearUser()
     window.location.href = '/'
+  }
+
+  const handleStartNewBMI = () => {
+    onNavigate('auth')
   }
 
   return (
