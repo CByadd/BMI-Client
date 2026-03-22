@@ -12,7 +12,7 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
   const [processing, setProcessing] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState(9) // Default amount
   const [loadingAmount, setLoadingAmount] = useState(true)
-  const [razorpayKey, setRazorpayKey] = useState(null) // Not used in mock mode, kept for compatibility
+  const [razorpayKey, setRazorpayKey] = useState(null)
   const [mockMode, setMockMode] = useState(false)
   const containerRef = useRef(null)
   const cardRef = useRef(null)
@@ -32,19 +32,21 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
           updateBaseURL(serverBase)
         }
         
-        // Fetch payment key (mock mode - not required but kept for compatibility)
+        // Fetch payment key
         try {
           const keyData = await api.getPaymentKey()
           if (keyData.ok && keyData.key_id) {
             setRazorpayKey(keyData.key_id)
+            setMockMode(keyData.mockMode === true)
             if (keyData.mockMode) {
-              setMockMode(true)
               console.log('[PAYMENT] 🧪 MOCK MODE: Payment system in mock mode')
+            } else {
+              console.log('[PAYMENT] 💳 LIVE MODE: Razorpay integration active')
             }
           }
         } catch (error) {
-          setMockMode(true) // Assume mock mode if key fetch fails
-          console.log('[PAYMENT] 🧪 MOCK MODE: Using mock payment (key fetch optional)')
+          console.error('Error fetching payment key:', error)
+          setMockMode(true) // Fallback to mock if key fetch fails (safeguard)
         }
         
         // Fetch payment amount
@@ -56,7 +58,6 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
         }
       } catch (error) {
         console.error('Error fetching payment config:', error)
-        // Use default amount on error
       } finally {
         setLoadingAmount(false)
       }
@@ -103,15 +104,15 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
         return
       }
 
-      // Create mock payment order
+      // Create payment order
       const orderData = await api.createPaymentOrder({
-        amount: Number(paymentAmount), // Ensure it's a number
+        amount: Number(paymentAmount),
         currency: 'INR',
         receipt: `rcpt${Date.now()}${(user?.userId || 'user').substring(0, 8)}`,
         notes: {
           userId: user?.userId || '',
           screenId: screenId || '',
-          bmiId: bmiId || '', // Include bmiId in payment order notes for server auto-trigger
+          bmiId: bmiId || '',
           userName: user?.name || '',
           userMobile: user?.mobile || ''
         }
@@ -123,64 +124,113 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
 
       const orderId = orderData.order.id
 
-      // ============================================
-      // RAZORPAY IMPLEMENTATION (COMMENTED OUT)
-      // ============================================
-      // // Configure Razorpay options
-      // const options = {
-      //   key: razorpayKey,
-      //   amount: orderData.order.amount,
-      //   currency: orderData.order.currency,
-      //   name: 'Well2Day',
-      //   description: 'BMI Analysis Payment',
-      //   order_id: orderId,
-      //   handler: async function (response) { ... },
-      //   ...
-      // }
-      // const rzp = new window.Razorpay(options)
-      // rzp.open()
-
-      // ============================================
-      // MOCK PAYMENT IMPLEMENTATION
-      // ============================================
-      console.log('[PAYMENT] 🧪 MOCK: Simulating payment process...')
-      
-      // Simulate payment processing delay (2 seconds)
-      await new Promise(resolve => setTimeout(resolve, 2000))
-
-      // Generate mock payment ID
-      const mockPaymentId = `pay_mock_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-      const mockSignature = `sig_mock_${Math.random().toString(36).substring(2, 15)}`
-
-      // Verify payment on server
-      const verifyData = await api.verifyPayment({
-        razorpay_order_id: orderId,
-        razorpay_payment_id: mockPaymentId,
-        razorpay_signature: mockSignature
-      })
-
-      if (verifyData.ok && verifyData.verified) {
-        // Payment verified successfully
-        setProcessing(false)
+      if (mockMode) {
+        // ============================================
+        // MOCK PAYMENT IMPLEMENTATION
+        // ============================================
+        console.log('[PAYMENT] 🧪 MOCK: Simulating payment process...')
         
-        console.log('[PAYMENT] 🧪 MOCK: Payment verified successfully')
-        
-        // Success animation
-        gsap.to(containerRef.current, {
-          scale: 1.05,
-          duration: 0.3,
-          yoyo: true,
-          repeat: 1,
-          ease: "power2.inOut",
-          onComplete: () => onPaymentSuccess(paymentAmount)
+        // Simulate payment processing delay (2 seconds)
+        await new Promise(resolve => setTimeout(resolve, 2000))
+
+        const mockPaymentId = `pay_mock_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+        const mockSignature = `sig_mock_${Math.random().toString(36).substring(2, 15)}`
+
+        // Verify payment on server
+        const verifyData = await api.verifyPayment({
+          razorpay_order_id: orderId,
+          razorpay_payment_id: mockPaymentId,
+          razorpay_signature: mockSignature
         })
+
+        if (verifyData.ok && verifyData.verified) {
+          handleSuccess()
+        } else {
+          throw new Error('Payment verification failed')
+        }
       } else {
-        throw new Error('Payment verification failed')
+        // ============================================
+        // RAZORPAY LIVE IMPLEMENTATION
+        // ============================================
+        if (!window.Razorpay) {
+          throw new Error('Razorpay SDK not loaded. Please check your internet connection.')
+        }
+
+        const options = {
+          key: razorpayKey,
+          amount: orderData.order.amount,
+          currency: orderData.order.currency,
+          name: 'Well2Day',
+          description: 'BMI Analysis Payment',
+          image: 'https://well2day.in/assets/img/Group%202325.png',
+          order_id: orderId,
+          handler: async function (response) {
+            try {
+              console.log('[PAYMENT] Razorpay response received:', response)
+              
+              const verifyData = await api.verifyPayment({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              })
+
+              if (verifyData.ok && verifyData.verified) {
+                handleSuccess()
+              } else {
+                alert('Payment verification failed. Please contact support.')
+                setProcessing(false)
+              }
+            } catch (err) {
+              console.error('Verification error:', err)
+              alert('Error verifying payment. Please contact support.')
+              setProcessing(false)
+            }
+          },
+          prefill: {
+            name: user?.name || '',
+            contact: user?.mobile || ''
+          },
+          theme: {
+            color: '#059669' // primary-600
+          },
+          modal: {
+            ondismiss: function() {
+              setProcessing(false)
+            }
+          }
+        }
+
+        const rzp = new window.Razorpay(options)
+        rzp.on('payment.failed', function (response) {
+          console.error('Payment failed:', response.error)
+          alert(`Payment failed: ${response.error.description}`)
+          setProcessing(false)
+        })
+        rzp.open()
       }
     } catch (error) {
       console.error('Payment error:', error)
       setProcessing(false)
-      alert('Failed to process payment. Please try again.')
+      alert(error.message || 'Failed to process payment. Please try again.')
+    }
+  }
+
+  const handleSuccess = () => {
+    setProcessing(false)
+    console.log('[PAYMENT] Payment successful and verified')
+    
+    // Success animation
+    if (containerRef.current) {
+      gsap.to(containerRef.current, {
+        scale: 1.05,
+        duration: 0.3,
+        yoyo: true,
+        repeat: 1,
+        ease: "power2.inOut",
+        onComplete: () => onPaymentSuccess(paymentAmount)
+      })
+    } else {
+      onPaymentSuccess(paymentAmount)
     }
   }
 
@@ -261,7 +311,6 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
                 ) : (
                   <div className="text-3xl font-bold text-primary-600">₹{paymentAmount}</div>
                 )}
-                {/* <div className="text-sm text-gray-500 line-through">₹199</div> */}
               </div>
             </div>
             
