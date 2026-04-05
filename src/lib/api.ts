@@ -25,6 +25,16 @@ export const api = {
     }
   },
 
+  getPaymentStatus: async (bmiId: string) => {
+    try {
+      const response = await axiosInstance.get(`/api/payment-status/${encodeURIComponent(bmiId)}`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Check payment status error:', error);
+      return { ok: false, paymentStatus: false };
+    }
+  },
+
   // OTP
   generateOTP: async (mobile: string) => {
     // Don't use global loading for OTP - let components handle their own loading state

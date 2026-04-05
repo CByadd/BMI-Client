@@ -7,6 +7,8 @@ import UserMenu from '../components/UserMenu'
 import ScreenLogo from '../components/ScreenLogo'
 import { useUserSessionStore } from '../stores/userSessionStore'
 
+const USE_MOCK_PAYMENT_ONLY = true
+
 function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
   const { clearUser } = useUserSessionStore()
   const [processing, setProcessing] = useState(false)
@@ -14,6 +16,7 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
   const [loadingAmount, setLoadingAmount] = useState(true)
   const [razorpayKey, setRazorpayKey] = useState(null)
   const [mockMode, setMockMode] = useState(false)
+  const [isSuccess, setIsSuccess] = useState(false)
   const containerRef = useRef(null)
   const cardRef = useRef(null)
   
@@ -31,7 +34,7 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
           useApiStore.getState().setServerBase(serverBase)
           updateBaseURL(serverBase)
         }
-        
+
         // Fetch payment key
         try {
           const keyData = await api.getPaymentKey()
@@ -46,9 +49,9 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
           }
         } catch (error) {
           console.error('Error fetching payment key:', error)
-          setMockMode(true) // Fallback to mock if key fetch fails (safeguard)
+          setMockMode(true)
         }
-        
+
         // Fetch payment amount
         if (screenId) {
           const data = await api.getPlayer(screenId)
@@ -65,6 +68,36 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
     
     fetchPaymentConfig()
   }, [screenId, serverBase])
+
+  // Background polling for payment status (kept intact for non-mock flow)
+  useEffect(() => {
+    let pollingInterval
+    
+    if (bmiId && !mockMode && razorpayKey && !isSuccess && !USE_MOCK_PAYMENT_ONLY) {
+      console.log('[PAYMENT] Starting background status polling for bmiId:', bmiId)
+      
+      pollingInterval = setInterval(async () => {
+        try {
+          const data = await api.getPaymentStatus(bmiId)
+          
+          if (data && data.ok && data.paymentStatus === true) {
+            console.log('[PAYMENT] ✅ Background poll detected successful payment!')
+            if (pollingInterval) clearInterval(pollingInterval)
+            handleSuccess()
+          }
+        } catch (pollError) {
+          console.debug('Background poll error (ignoring):', pollError.message)
+        }
+      }, 5000)
+    }
+    
+    return () => {
+      if (pollingInterval) {
+        console.log('[PAYMENT] Stopping background status polling')
+        clearInterval(pollingInterval)
+      }
+    }
+  }, [bmiId, mockMode, razorpayKey, isSuccess])
 
   useEffect(() => {
     if (containerRef.current && cardRef.current) {
@@ -104,6 +137,13 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
         return
       }
 
+      if (USE_MOCK_PAYMENT_ONLY) {
+        console.log('[PAYMENT] Mock payment forced from client flag')
+        await new Promise(resolve => setTimeout(resolve, 800))
+        handleSuccess()
+        return
+      }
+
       // Create payment order
       const orderData = await api.createPaymentOrder({
         amount: Number(paymentAmount),
@@ -125,18 +165,12 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
       const orderId = orderData.order.id
 
       if (mockMode) {
-        // ============================================
-        // MOCK PAYMENT IMPLEMENTATION
-        // ============================================
         console.log('[PAYMENT] 🧪 MOCK: Simulating payment process...')
-        
-        // Simulate payment processing delay (2 seconds)
         await new Promise(resolve => setTimeout(resolve, 2000))
 
         const mockPaymentId = `pay_mock_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
         const mockSignature = `sig_mock_${Math.random().toString(36).substring(2, 15)}`
 
-        // Verify payment on server
         const verifyData = await api.verifyPayment({
           razorpay_order_id: orderId,
           razorpay_payment_id: mockPaymentId,
@@ -149,9 +183,6 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
           throw new Error('Payment verification failed')
         }
       } else {
-        // ============================================
-        // RAZORPAY LIVE IMPLEMENTATION
-        // ============================================
         if (!window.Razorpay) {
           throw new Error('Razorpay SDK not loaded. Please check your internet connection.')
         }
@@ -191,7 +222,7 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
             contact: user?.mobile || ''
           },
           theme: {
-            color: '#059669' // primary-600
+            color: '#059669'
           },
           modal: {
             ondismiss: function() {
@@ -216,8 +247,11 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
   }
 
   const handleSuccess = () => {
-    setProcessing(false)
-    console.log('[PAYMENT] Payment successful and verified')
+    if (isSuccess) return; // Prevent double trigger
+    
+    setIsSuccess(true);
+    setProcessing(false);
+    console.log('[PAYMENT] Payment successful and verified');
     
     // Success animation
     if (containerRef.current) {
@@ -237,6 +271,22 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
   const handleLogout = () => {
     clearUser()
     window.location.href = '/'
+  }
+
+  const handleCheckStatus = async () => {
+    if (!bmiId || isSuccess || USE_MOCK_PAYMENT_ONLY) return
+    setProcessing(true)
+    try {
+      const data = await api.getPaymentStatus(bmiId)
+      if (data && data.ok && data.paymentStatus === true) {
+        handleSuccess()
+      } else {
+        alert('Payment not detected yet. If you have paid, please wait a few seconds and try again.')
+        setProcessing(false)
+      }
+    } catch (err) {
+      setProcessing(false)
+    }
   }
 
   return (
@@ -276,10 +326,9 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
         </div>
 
         <div ref={cardRef} className="space-y-6">
-          {/* Mock Mode Banner */}
-          {mockMode && (
+          {(USE_MOCK_PAYMENT_ONLY || mockMode) && (
             <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg text-sm text-center">
-              🧪 Mock Payment Mode: Payments will be automatically approved for testing
+              Test mode is enabled. Clicking the button below will mark the payment as completed.
             </div>
           )}
 
@@ -343,12 +392,25 @@ function PaymentPage({ user, onPaymentSuccess, screenId, serverBase, bmiId }) {
               {processing ? (
                 <div className="flex items-center justify-center">
                   <div className="loading-spinner w-5 h-5 mr-2"></div>
-                  Processing Payment...
+                  {USE_MOCK_PAYMENT_ONLY ? 'Completing Payment...' : 'Processing Payment...'}
                 </div>
               ) : (
-                `Pay ₹${paymentAmount} - Secure Payment`
+                USE_MOCK_PAYMENT_ONLY
+                  ? `Complete Mock Payment - ₹${paymentAmount}`
+                  : `Pay ₹${paymentAmount} - Secure Payment`
               )}
             </button>
+
+            {!mockMode && !isSuccess && !USE_MOCK_PAYMENT_ONLY && (
+              <div className="mt-4 text-center">
+                <button
+                  onClick={handleCheckStatus}
+                  className="text-sm font-medium text-emerald-600 hover:text-emerald-700 underline focus:outline-none"
+                >
+                  Already paid? Click here to refresh status
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Security Badge */}
